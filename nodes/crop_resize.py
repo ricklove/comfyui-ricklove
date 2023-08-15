@@ -18,7 +18,7 @@ class RL_Crop_Resize:
             "required": {
                 "image": ("IMAGE",),
                 "mask": ("MASK",),
-                "padding": ("INT",{"default": 24, "min": 0, "max": 4096, "step": 1}),
+                "padding": ("INT",{"default": 128, "min": 0, "max": 4096, "step": 1}),
                 "max_side_length": ("INT",{"default": 512, "min": 0, "max": 4096, "step": 1}),
             }
         }
@@ -49,19 +49,21 @@ class RL_Crop_Resize:
         hr = max_side_length / h_pad
         ratio = min(wr,hr)
 
-        w_resized = int(w_pad * ratio / 8) * 8
-        h_resized = int(h_pad * ratio / 8) * 8
+        w_resized = int(w_pad * ratio / 32) * 32
+        h_resized = int(h_pad * ratio / 32) * 32
 
         w_source = round(w_resized / ratio)
         h_source = round(h_resized / ratio)
 
-        r_source = l + w_source
-        b_source = t + h_source
+        l_source = l
+        t_source = t
+        r_source = l_source + w_source
+        b_source = t_source + h_source
 
-        mask_cropped = mask_pil.crop((l,t,r_source,b_source))
+        mask_cropped = mask_pil.crop((l_source,t_source,r_source,b_source))
         mask_resized = mask_cropped.resize((w_resized, h_resized), Image.Resampling.LANCZOS)
 
-        image_cropped = image_pil.crop((l,t,r_source,b_source))
+        image_cropped = image_pil.crop((l_source,t_source,r_source,b_source))
         image_resized = image_cropped.resize((w_resized, h_resized), Image.Resampling.LANCZOS)
 
         # mask_pil.crop(bbox)
@@ -73,7 +75,7 @@ class RL_Crop_Resize:
         # region_mask, crop_data = self.WT.Masking.crop_region(mask_pil, region_type, padding)
         # region_tensor = pil2mask(ImageOps.invert(region_mask)).unsqueeze(0).unsqueeze(1)
         
-        bbox_source = (t, l, r_source, b_source)
+        bbox_source = (t_source, l_source, r_source, b_source)
 
         return (image_tensor, mask_tensor, bbox_source, t, l, r_source, b_source, w_source, h_source, w_resized, h_resized)
         
