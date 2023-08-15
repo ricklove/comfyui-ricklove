@@ -450,13 +450,13 @@ def calculate_flow_inverse(flow):
     #     return f
 
     remove_islands()
-    fill_holes(2)
-    remove_islands()
-    fill_holes(2)
-    remove_islands()
-    fill_holes(2)
-    remove_islands()
-    fill_holes(2)
+    # fill_holes(2)
+    # remove_islands()
+    # fill_holes(2)
+    # remove_islands()
+    # fill_holes(2)
+    # remove_islands()
+    # fill_holes(2)
     # fill_holes(2)
     # fill_holes(2)
     # fill_holes(2)
@@ -466,6 +466,8 @@ def calculate_flow_inverse(flow):
     print('f', f)
     flow_inv = np.split(f, [2,], 2)[0]
     print('flow_inv', flow_inv)
+
+    
 
     # (H, W, 2) => (2, H, W)
     flow_inv = flow_inv.transpose(2, 0, 1)
