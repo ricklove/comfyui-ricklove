@@ -122,22 +122,16 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path,ma
     h, w = image1.shape[:2]
     image2 =  cv2.resize(utilityb.base64_to_texture(image2_path), (w,h), interpolation=cv2.INTER_LINEAR)
 
-  #  image1 =  utilityb.base64_to_texture(image1_path),max_dimension
- #   image2 =  utilityb.base64_to_texture(image2_path),max_dimension
-#    provided_image = read_image(provided_image_path)
-    provided_image = utilityb.base64_to_texture(provided_image_path)
-    provided_image = cv2.resize(provided_image, (w,h), interpolation=cv2.INTER_LINEAR)
-    
+
+    # reverse order
+    img2_batch,img1_batch = infer(image2,image1)
+    list_of_flows_inv = model(img2_batch.to(device), img1_batch.to(device))
+    predicted_flows = list_of_flows_inv[-1]
+    predicted_flow_inv = list_of_flows_inv[-1][0]
+    # flow_img = flow_to_image(predicted_flow).to("cpu")
 
 
-    img1_batch,img2_batch = infer(image1,image2)
-    list_of_flows = model(img1_batch.to(device), img2_batch.to(device))
-    predicted_flows = list_of_flows[-1]
-    predicted_flow = list_of_flows[-1][0]
-    flow_img = flow_to_image(predicted_flow).to("cpu")
-
-
-    predicted_flow_inv = calculate_flow_inverse(predicted_flow)
+    # predicted_flow_inv = calculate_flow_inverse(predicted_flow)
     flow_inv_img = flow_to_image(predicted_flow_inv).to("cpu")
     #flo_file = write_flo(predicted_flow, "flofile.flo")
     
@@ -147,8 +141,14 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path,ma
     #print(flow.shape)
     #warped_image = apply_flow_to_image_try3(provided_image,predicted_flow)
 
+      #  image1 =  utilityb.base64_to_texture(image1_path),max_dimension
+ #   image2 =  utilityb.base64_to_texture(image2_path),max_dimension
+#    provided_image = read_image(provided_image_path)
+    provided_image = utilityb.base64_to_texture(provided_image_path)
+    provided_image = cv2.resize(provided_image, (w,h), interpolation=cv2.INTER_LINEAR)
+
     # warped_image,unused_mask,white_pixels = apply_flow_to_image_with_unused_mask(provided_image,predicted_flow)
-    warped_image,unused_mask,white_pixels = apply_flow_to_image_with_unused_mask_inv(provided_image,predicted_flow_inv, flow_inv_img)
+    warped_image,unused_mask,white_pixels = apply_flow_to_image_with_unused_mask_inv(provided_image,predicted_flow_inv)
 
 
 
@@ -158,11 +158,11 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path,ma
     warped_image_path=output_path
     save_image(warped_image, output_path)
     save_image(unused_mask, os.path.join(output_dir, 'w', f'{output_filename}.unused_mask.png' ))
-    write_jpeg(flow_img, os.path.join(output_dir, 'w', f'{output_filename}.flow.png' ))
+    # write_jpeg(flow_img, os.path.join(output_dir, 'w', f'{output_filename}.flow.png' ))
     write_jpeg(flow_inv_img, os.path.join(output_dir, 'w', f'{output_filename}.flow_inv.png' ))
 
     print('apply_flow_based_on_images: DONE, saved', warped_image_path)
-    return warped_image_path,predicted_flow,unused_mask,white_pixels,flow_img
+    return warped_image_path,predicted_flow_inv,unused_mask,white_pixels,flow_inv_img
 
 def apply_flow_to_image(image, flow):
     """
@@ -467,7 +467,7 @@ def calculate_flow_inverse(flow):
     flow_inv = np.split(f, [2,], 2)[0]
     print('flow_inv', flow_inv)
 
-    
+
 
     # (H, W, 2) => (2, H, W)
     flow_inv = flow_inv.transpose(2, 0, 1)
@@ -519,7 +519,7 @@ def calculate_flow_inverse(flow):
     return flow_inv
 
 
-def apply_flow_to_image_with_unused_mask_inv(image, flow, flow_img):
+def apply_flow_to_image_with_unused_mask_inv(image, flow):
     """
     Apply an optical flow tensor to a NumPy image by moving the pixels based on the flow and create a mask where the remap meant there was nothing there.
     
