@@ -458,7 +458,7 @@ def apply_flow_to_image_with_unused_mask_inv(image, flow, flow_img):
     # new_coords = np.subtract(coords, flow)
     new_coords = np.add(coords, flow)
     avg = utilityb.avg_edge_pixels(image)
-    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
 
     # Create a mask where the remap meant there was nothing there
     # if isinstance(flow_img, torch.Tensor):
