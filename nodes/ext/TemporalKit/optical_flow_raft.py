@@ -148,6 +148,7 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path,ma
 
     # warped_image_path = os.path.join(output_folder, f'warped_provided_image_{index + 1}.png')
 
+    warped_image_path=output_path
     save_image(warped_image, output_path)
     save_image(unused_mask, os.path.join(output_dir, 'w', f'{output_filename}.unused_mask.png' ))
     write_jpeg(flow_img, os.path.join(output_dir, 'w', f'{output_filename}.flow.png' ))
