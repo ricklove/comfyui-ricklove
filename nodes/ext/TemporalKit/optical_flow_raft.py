@@ -272,7 +272,7 @@ def calculate_flow_inverse(flow):
     height, width, _ = flow.shape
     # print('calculate_flow_inverse: flow', flow)
 
-    # TODO: generate the map_pts (for each target pixel, which src_pt should be used)
+    # generate the map_pts (for each target pixel, which src_pt should be used)
     # create a flow_inv, [h,w,{x,y, magnitude_so_far}] 
     # iterate through the flow pixels
     # find the dest pixel for that flow pixel (4 pixels interpolation => ratio of application)
@@ -294,8 +294,8 @@ def calculate_flow_inverse(flow):
             y_mag = y_delta - y_ave
             mag = math.sqrt(x_mag*x_mag + y_mag*y_mag)
 
-            s = 3
-            sf = 3
+            s = 1
+            sf = 1
 
             for fx in range(-s,s+1):
                 fx0 = int(cx+fx)
@@ -379,6 +379,90 @@ def calculate_flow_inverse(flow):
 
             # break
         # break
+
+    # remove islands
+    def remove_islands(size = 1):
+        f_orig = f.copy()
+        for y in range(size,height-size):
+            for x in range(size,width-size):
+                if f[y,x][2] <= 0: continue
+
+                count = 0
+                for i in range(-size,size+1):
+                    for j in range(-size,size+1):
+                        fx0 = x+i
+                        fy0 = y+j
+
+                        if f_orig[fy0,fx0][2] <= 0: continue
+                        count = count + 1
+                        if count > 4: break
+                    if count > 4: break
+                if count > 4: break
+                
+                f[y,x] = (0,0,0)
+
+    # fill holes
+    def fill_holes(size = 4):
+        f_orig = f.copy()
+        
+        for y in range(size,height-size):
+            for x in range(size,width-size):
+                if f[y,x][2] > 0: continue
+
+                done = False
+                for r in range(1, size):
+                    for i in range(-r,r+1):
+                        for j in range(-r,r+1):
+                            if abs(i)+abs(j) != r: continue
+
+                            fx0 = x+i
+                            fy0 = y+j
+
+                            if f_orig[fy0,fx0][2] <= 0: continue
+                            f[y,x]=f_orig[fy0,fx0]
+                            done = True
+                            break
+                        if done: break
+                    if done: break
+        return f
+    
+    # # expand holes
+    # def consume_islands(size = 4):
+    #     f_orig = f.copy()
+        
+    #     for y in range(size,height-size):
+    #         for x in range(size,width-size):
+    #             if f[y,x][2] > 0: continue
+
+    #             empties = False
+    #             for i in range(-size,size+1):
+    #                 for j in range(-size,size+1):
+    #                     if abs(i)+abs(j) != r: continue
+
+    #                     fx0 = x+i
+    #                     fy0 = y+j
+
+    #                     if f_orig[fy0,fx0][2] <= 0: continue
+    #                     f[y,x]=f_orig[fy0,fx0]
+    #                     done = True
+    #                     break
+    #                 if done: break
+    #     return f
+
+    remove_islands()
+    fill_holes(2)
+    remove_islands()
+    fill_holes(2)
+    remove_islands()
+    fill_holes(2)
+    remove_islands()
+    fill_holes(2)
+    # fill_holes(2)
+    # fill_holes(2)
+    # fill_holes(2)
+    # fill_holes(2)
+    # consume_islands(4)
+
     print('f', f)
     flow_inv = np.split(f, [2,], 2)[0]
     print('flow_inv', flow_inv)
@@ -458,7 +542,7 @@ def apply_flow_to_image_with_unused_mask_inv(image, flow, flow_img):
     # new_coords = np.subtract(coords, flow)
     new_coords = np.add(coords, flow)
     avg = utilityb.avg_edge_pixels(image)
-    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
 
     # Create a mask where the remap meant there was nothing there
     # if isinstance(flow_img, torch.Tensor):
