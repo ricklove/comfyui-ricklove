@@ -18,6 +18,7 @@ from urllib.request import urlretrieve
 from scipy.interpolate import LinearNDInterpolator
 from imageio import imread, imwrite
 from torchvision.utils import flow_to_image
+import math
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = raft_large(weights=Raft_Large_Weights.DEFAULT, progress=False).to(device)
@@ -134,6 +135,10 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path,ma
     predicted_flows = list_of_flows[-1]
     predicted_flow = list_of_flows[-1][0]
     flow_img = flow_to_image(predicted_flow).to("cpu")
+
+
+    predicted_flow_inv = calculate_flow_inverse(predicted_flow)
+    flow_inv_img = flow_to_image(predicted_flow_inv).to("cpu")
     #flo_file = write_flo(predicted_flow, "flofile.flo")
     
     #write_jpeg(flow_img, f"./flow/predicted_flow{index}.jpg")
@@ -141,7 +146,9 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path,ma
 
     #print(flow.shape)
     #warped_image = apply_flow_to_image_try3(provided_image,predicted_flow)
-    warped_image,unused_mask,white_pixels = apply_flow_to_image_with_unused_mask(provided_image,predicted_flow)
+
+    # warped_image,unused_mask,white_pixels = apply_flow_to_image_with_unused_mask(provided_image,predicted_flow)
+    warped_image,unused_mask,white_pixels = apply_flow_to_image_with_unused_mask_inv(provided_image,predicted_flow_inv, flow_inv_img)
 
 
 
@@ -152,6 +159,7 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path,ma
     save_image(warped_image, output_path)
     save_image(unused_mask, os.path.join(output_dir, 'w', f'{output_filename}.unused_mask.png' ))
     write_jpeg(flow_img, os.path.join(output_dir, 'w', f'{output_filename}.flow.png' ))
+    write_jpeg(flow_inv_img, os.path.join(output_dir, 'w', f'{output_filename}.flow_inv.png' ))
 
     print('apply_flow_based_on_images: DONE, saved', warped_image_path)
     return warped_image_path,predicted_flow,unused_mask,white_pixels,flow_img
@@ -246,6 +254,227 @@ def apply_flow_to_image_try3(image,flow):
 
     return warped_image
 
+# https://stackoverflow.com/a/65205082/567524
+def calculate_flow_inverse(flow):
+    if isinstance(flow, torch.Tensor):
+        flow = flow.detach().cpu().numpy()
+
+    print('calculate_flow_inverse: START')
+
+    x_ave = np.average(flow[0])
+    y_ave = np.average(flow[1])
+
+    #  (2, H, W) => (H, W, 2)
+    # print('calculate_flow_inverse: flow.shape before', flow.shape)
+    flow = flow.transpose(1, 2, 0)
+    # print('calculate_flow_inverse: flow.shape after', flow.shape)
+
+    height, width, _ = flow.shape
+    # print('calculate_flow_inverse: flow', flow)
+
+    # TODO: generate the map_pts (for each target pixel, which src_pt should be used)
+    # create a flow_inv, [h,w,{x,y, magnitude_so_far}] 
+    # iterate through the flow pixels
+    # find the dest pixel for that flow pixel (4 pixels interpolation => ratio of application)
+    # apply this flow pixel coord based on distance magnitude
+
+    f = np.zeros((height,width,3))
+    for y in range(0,height):
+        for x in range(0,width):
+            # print('x,y',x,y)
+            dest = flow[y, x]
+            # print(dest)
+            x_delta = dest[0]
+            y_delta = dest[1]
+            cx = x + x_delta
+            cy = y + y_delta
+
+            # --- use max movement
+            x_mag = x_delta - x_ave
+            y_mag = y_delta - y_ave
+            mag = math.sqrt(x_mag*x_mag + y_mag*y_mag)
+
+            s = 3
+            sf = 3
+
+            for fx in range(-s,s+1):
+                fx0 = int(cx+fx)
+                fxd = fx0 - cx
+
+                if(fx0<0 or fx0>width-1): continue
+
+                for fy in range(-s,s+1):
+                    fy0 = int(cy+fy)
+                    fyd = fy0 - cy
+
+                    if(fy0<0 or fy0>height-1): continue
+
+                    fdist = math.sqrt(fxd*fxd+fyd*fyd)
+                    if(fdist>sf): continue
+
+                    fv = f[fy0, fx0]
+                    fmag = mag - 4 * fdist
+
+                    # fmag = mag * (1-(dx-dx0)) * (1-(dy-dy0))
+                    if(fmag>fv[2]):
+                        fv[0] = -x_delta
+                        fv[1] = -y_delta
+                        fv[2] = fmag
+
+            # fv = f[dy1, dx0]
+            # # fmag = mag * (1-(dx-dx0)) * (1-(dy1-dy))
+            # if(fmag>fv[2]):
+            #     fv[0] = -deltax
+            #     fv[1] = -deltay
+            #     fv[2] = fmag
+
+            # fv = f[dy0, dx1]
+            # # fmag = mag * (1-(dx1-dx)) * (1-(dy-dy0))
+            # if(fmag>fv[2]):
+            #     fv[0] = -deltax
+            #     fv[1] = -deltay
+            #     fv[2] = fmag
+
+            # fv = f[dy1, dx1]
+            # # fmag = mag * (1-(dx1-dx)) * (1-(dy1-dy))
+            # if(fmag>fv[2]):
+            #     fv[0] = -deltax
+            #     fv[1] = -deltay
+            #     fv[2] = fmag
+
+            # --- average forces based on distance
+            # mag = math.sqrt(deltax*deltax + deltay*deltay)
+
+            # fv = f[dy0, dx0]
+            # # print('fv00 before', fv)
+            # fmag = mag * (1-(dx-dx0)) * (1-(dy-dy0))
+            # fv[0] = (fv[0] * fv[2] + -deltax * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[1] = (fv[1] * fv[2] + -deltay * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[2] = (fv[2] + fmag)
+            # # print('fv00', fv, fmag, (dx, dy), (deltax, deltay), (dx0, dx1, dy0, dy1))
+
+            # fv = f[dy1, dx0]
+            # # print('fv01 before', fv)
+            # fmag = mag * (1-(dx-dx0)) * (1-(dy1-dy))
+            # fv[0] = (fv[0] * fv[2] + -deltax * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[1] = (fv[1] * fv[2] + -deltay * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[2] = (fv[2] + fmag)
+            # # print('fv01', fv, fmag, (dx, dy), (deltax, deltay), (dx0, dx1, dy0, dy1))
+
+            # fv = f[dy0, dx1]
+            # # print('fv10 before', fv)
+            # fmag = mag * (1-(dx1-dx)) * (1-(dy-dy0))
+            # fv[0] = (fv[0] * fv[2] + -deltax * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[1] = (fv[1] * fv[2] + -deltay * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[2] = (fv[2] + fmag)
+            # # print('fv10', fv, fmag, (dx, dy), (deltax, deltay), (dx0, dx1, dy0, dy1))
+
+            # fv = f[dy1, dx1]
+            # # print('fv11 before', fv)
+            # fmag = mag * (1-(dx1-dx)) * (1-(dy1-dy))
+            # fv[0] = (fv[0] * fv[2] + -deltax * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[1] = (fv[1] * fv[2] + -deltay * fmag) / (fv[2] + fmag + 0.000001)
+            # fv[2] = (fv[2] + fmag)
+            # # print('fv11', fv, fmag, (dx, dy), (deltax, deltay), (dx0, dx1, dy0, dy1))
+
+            # break
+        # break
+    print('f', f)
+    flow_inv = np.split(f, [2,], 2)[0]
+    print('flow_inv', flow_inv)
+
+    # (H, W, 2) => (2, H, W)
+    flow_inv = flow_inv.transpose(2, 0, 1)
+    flow_inv = torch.from_numpy(flow_inv).float()
+    print('flow_inv.shape', flow_inv.shape)
+    print('flow_inv', flow_inv)
+
+
+    # def transform(src_pts, H):
+    #     # src = [src_pts 1]
+    #     src = np.pad(src_pts, [(0, 0), (0, 1)], constant_values=1)
+    #     # pts = H * src
+    #     pts = np.dot(H, src.T).T
+    #     # normalize and throw z=1
+    #     pts = (pts / pts[:, 2].reshape(-1, 1))[:, 0:2]
+    #     return pts
+
+    # x_coords, y_coords = np.meshgrid(np.arange(width), np.arange(height))
+    # coords = np.stack([x_coords, y_coords], axis=-1).astype(np.float32)
+    # print('calculate_flow_inverse: coords', coords.shape)
+    # print('calculate_flow_inverse: coords', coords)
+
+    # src_pts = coords.reshape(-1, 2)
+    # delta_pts = flow.reshape(-1, 2)
+    # dst_pts = src_pts+delta_pts
+    # print('calculate_flow_inverse: src_pts', src_pts.shape)
+    # print('calculate_flow_inverse: src_pts', src_pts)
+    # print('calculate_flow_inverse: dst_pts', dst_pts.shape)
+    # print('calculate_flow_inverse: dst_pts', dst_pts)
+
+    # H, status = cv2.findHomography(src_pts, dst_pts)
+    # print('calculate_flow_inverse: H', H.shape)
+    # print('calculate_flow_inverse: H', H)
+
+    # idx_pts = np.mgrid[0:width, 0:height].reshape(2, -1).T
+    # print('calculate_flow_inverse: idx_pts', idx_pts.shape)
+    # print('calculate_flow_inverse: idx_pts', idx_pts)
+
+    # map_pts = transform(idx_pts, np.linalg.inv(H))
+    # map_pts = map_pts.reshape(width, height, 2).astype(np.float32)
+    # # warped = cv.remap(img, map_pts, None, cv.INTER_CUBIC).transpose(1, 0, 2)
+
+    # # (W, H, 2) => (2, H, W)
+    # flow_inv = map_pts.transpose(2, 1, 0)
+    # flow_inv = torch.from_numpy(flow_inv).float()
+
+    # print('calculate_flow_inverse: flow_inv', flow_inv)
+
+    return flow_inv
+
+
+def apply_flow_to_image_with_unused_mask_inv(image, flow, flow_img):
+    """
+    Apply an optical flow tensor to a NumPy image by moving the pixels based on the flow and create a mask where the remap meant there was nothing there.
+    
+    Args:
+        image (np.ndarray): Input image with shape (height, width, channels).
+        flow (np.ndarray): Optical flow tensor with shape (height, width, 2).
+        
+    Returns:
+        tuple: Warped image with the same shape as the input image, and a mask where the remap meant there was nothing there.
+    """
+
+    print('apply_flow_to_image_with_unused_mask_inv: START')
+
+    height, width, _ = image.shape
+    x_coords, y_coords = np.meshgrid(np.arange(width), np.arange(height))
+    coords = np.stack([x_coords, y_coords], axis=-1).astype(np.float32)
+
+    # Add the flow to the original coordinates
+    if isinstance(flow, torch.Tensor):
+        flow = flow.detach().cpu().numpy()
+    flow = flow.transpose(1, 2, 0)
+    # new_coords = np.subtract(coords, flow)
+    new_coords = np.add(coords, flow)
+    avg = utilityb.avg_edge_pixels(image)
+    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+
+    # Create a mask where the remap meant there was nothing there
+    # if isinstance(flow_img, torch.Tensor):
+    #     flow_img = flow_img.detach().cpu().numpy()
+    # mask = Image.fromarray(flow_img).convert('L')
+
+    # Create a mask where the remap meant there was nothing there
+    mask = utilityb.create_hole_mask(flow)
+    white_pixels = np.sum(mask > 0)
+    #print(f'white pixels {white_pixels}')
+
+    #remove later
+    #warped_image = warp_image2(image,flow)
+
+    return warped_image, mask,white_pixels
+
 
 def apply_flow_to_image_with_unused_mask(image, flow):
     """
@@ -268,7 +497,7 @@ def apply_flow_to_image_with_unused_mask(image, flow):
     flow = flow.transpose(1, 2, 0)
     new_coords = np.subtract(coords, flow)
     avg = utilityb.avg_edge_pixels(image)
-    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
 
     # Create a mask where the remap meant there was nothing there
     mask = utilityb.create_hole_mask(flow)
