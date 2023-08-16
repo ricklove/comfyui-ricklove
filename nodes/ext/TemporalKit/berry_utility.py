@@ -32,6 +32,36 @@ def avg_edge_pixels(img):
     
     return avg_edge_pixel
 
+def create_hole_mask_inv(flow_map):
+    h, w, _ = flow_map.shape
+    x_coords, y_coords = np.meshgrid(np.arange(w), np.arange(h))
+
+    # Compute the new coordinates of each pixel after the optical flow is applied
+    new_x_coords = np.clip(x_coords + flow_map[..., 0], 0, w - 1).astype(int)
+    new_y_coords = np.clip(y_coords + flow_map[..., 1], 0, h - 1).astype(int)
+
+    # Create a 2D array to keep track of whether a pixel is occupied or not
+    occupied = np.zeros((h, w), dtype=bool)
+
+    # Mark the pixels that are occupied after the optical flow is applied
+    occupied[new_y_coords, new_x_coords] = True
+
+    # Create the hole mask by marking unoccupied pixels as holes (value of 1)
+    hole_mask = np.logical_not(occupied).astype(np.uint8)
+
+    
+
+    expanded = filter_mask(hole_mask) * 255
+    #expanded = hole_mask * 255
+    #blurred_hole_mask = box_(expanded, sigma=3)
+    toblur = Image.fromarray(expanded).convert('L')
+    blurred_hole_mask = np.array(toblur.filter(ImageFilter.GaussianBlur(3)))
+
+    #blurred_numpy = np.array( Image.fromarray(expanded).filter(ImageFilter.GaussianBlur(3)))
+    #blurred_hole_mask[blurred_hole_mask > 150] = 255
+    filtered_smol = filter_mask(hole_mask,4,0.4,0.3) * 255
+    return blurred_hole_mask + filtered_smol
+
 
 def create_hole_mask(flow_map):
     h, w, _ = flow_map.shape
