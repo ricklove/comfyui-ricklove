@@ -150,18 +150,20 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path, o
 
 
         # resize
-        w2,h2,_ = img1_texture.shape
+        h2,w2,_ = img1_texture.shape
         pixel_scale = max(img1_texture.shape) / max_dimension
         # print('predicted_flow_rev', predicted_flow_rev.shape)
         #  (2, H, W) => (H, W, 2)
         predicted_flow_rev = np.transpose(predicted_flow_rev, (1,2,0))
-        predicted_flow_rev = cv2.resize(predicted_flow_rev, (h2,w2), interpolation = cv2.INTER_CUBIC)
+        predicted_flow_rev = cv2.resize(predicted_flow_rev, (w2,h2), interpolation = cv2.INTER_LANCZOS4)
+        predicted_flow_rev = cv2.GaussianBlur(predicted_flow_rev, (37,37), 0)
         predicted_flow_rev = np.transpose(predicted_flow_rev, (2,0,1))
         predicted_flow_rev[0] = pixel_scale * predicted_flow_rev[0]
         predicted_flow_rev[1] = pixel_scale * predicted_flow_rev[1]
 
         predicted_flow_inv = np.transpose(predicted_flow_inv, (1,2,0))
-        predicted_flow_inv = cv2.resize(predicted_flow_inv, (h2,w2), interpolation = cv2.INTER_CUBIC)
+        predicted_flow_inv = cv2.resize(predicted_flow_inv, (w2,h2), interpolation = cv2.INTER_LANCZOS4)
+        predicted_flow_inv = cv2.GaussianBlur(predicted_flow_inv, (37,37), 0)
         predicted_flow_inv = np.transpose(predicted_flow_inv, (2,0,1))
         predicted_flow_inv[0] = pixel_scale * predicted_flow_inv[0]
         predicted_flow_inv[1] = pixel_scale * predicted_flow_inv[1]

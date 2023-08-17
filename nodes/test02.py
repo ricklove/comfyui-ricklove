@@ -46,11 +46,11 @@ def load_image( infilename ) :
     return img_arr
 
 def apply_flow(to_index, from_index):
-    # img_from = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out{from_index:05}.png"
-    # img_to = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out{to_index:05}.png"
-    # img_from_ref = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out{from_index:05}.png"
-    # # img_from_ref = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/keys/seq_{from_index:05}.png"
-    # output_path = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/_out_test/w{to_index:05}_{from_index:05}.png"
+    img_from = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out{from_index:05}.png"
+    img_to = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out{to_index:05}.png"
+    img_from_ref = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out{from_index:05}.png"
+    # img_from_ref = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/keys/seq_{from_index:05}.png"
+    output_path = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/_out_test/w{to_index:05}_{from_index:05}.png"
 
     # img_from = f"D:/Projects/ai/data/unclean/lz-13/IMG_5804/video/out{from_index:05}.png"
     # img_to = f"D:/Projects/ai/data/unclean/lz-13/IMG_5804/video/out{to_index:05}.png"
@@ -65,11 +65,11 @@ def apply_flow(to_index, from_index):
     # output_path = f"D:/Projects/ai/data/unclean/lz-50/IMG_8416/_out_test/w{to_index:05}_{from_index:05}.png"
 
 
-    img_from = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out{from_index:05}.png"
-    img_to = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out{to_index:05}.png"
-    # img_from_ref = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out{from_index:05}.png"
-    img_from_ref = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/seq_blend/seq_blend_{from_index:05}.png"
-    output_path = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/_out_test/w{to_index:05}_{from_index:05}.png"
+    # img_from = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out{from_index:05}.png"
+    # img_to = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out{to_index:05}.png"
+    # # img_from_ref = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out{from_index:05}.png"
+    # img_from_ref = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/seq_blend/seq_blend_{from_index:05}.png"
+    # output_path = f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/_out_test/w{to_index:05}_{from_index:05}.png"
 
     if Path(output_path).exists():
         print(f'apply_flow: SKIPPING {output_path}')
@@ -78,8 +78,8 @@ def apply_flow(to_index, from_index):
     apply_flow_based_on_images(img_from, img_to, img_from_ref, output_path)
 
 
-i_first = 1
-i_last = 20
+i_first = 232
+i_last = 237
 r = 5
 
 for to_index in range(i_first,i_last+1):
