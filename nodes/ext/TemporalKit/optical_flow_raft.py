@@ -155,15 +155,21 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path, o
         # print('predicted_flow_rev', predicted_flow_rev.shape)
         #  (2, H, W) => (H, W, 2)
         predicted_flow_rev = np.transpose(predicted_flow_rev, (1,2,0))
+        # predicted_flow_rev = cv2.resize(predicted_flow_rev, (int(w/8),int(h/8)), interpolation = cv2.INTER_LANCZOS4)
         predicted_flow_rev = cv2.resize(predicted_flow_rev, (w2,h2), interpolation = cv2.INTER_LANCZOS4)
-        predicted_flow_rev = cv2.GaussianBlur(predicted_flow_rev, (37,37), 0)
+        # predicted_flow_rev = cv2.GaussianBlur(predicted_flow_rev, (3,3), 0)
+        # predicted_flow_rev = cv2.GaussianBlur(predicted_flow_rev, (5,5), 0)
+        # predicted_flow_rev = cv2.GaussianBlur(predicted_flow_rev, (7,7), 0)
         predicted_flow_rev = np.transpose(predicted_flow_rev, (2,0,1))
         predicted_flow_rev[0] = pixel_scale * predicted_flow_rev[0]
         predicted_flow_rev[1] = pixel_scale * predicted_flow_rev[1]
 
         predicted_flow_inv = np.transpose(predicted_flow_inv, (1,2,0))
+        # predicted_flow_inv = cv2.resize(predicted_flow_inv, (int(w/8),int(h/8)), interpolation = cv2.INTER_LANCZOS4)
         predicted_flow_inv = cv2.resize(predicted_flow_inv, (w2,h2), interpolation = cv2.INTER_LANCZOS4)
-        predicted_flow_inv = cv2.GaussianBlur(predicted_flow_inv, (37,37), 0)
+        # predicted_flow_inv = cv2.GaussianBlur(predicted_flow_inv, (3,3), 0)
+        # predicted_flow_inv = cv2.GaussianBlur(predicted_flow_inv, (5,5), 0)
+        # predicted_flow_inv = cv2.GaussianBlur(predicted_flow_inv, (7,7), 0)
         predicted_flow_inv = np.transpose(predicted_flow_inv, (2,0,1))
         predicted_flow_inv[0] = pixel_scale * predicted_flow_inv[0]
         predicted_flow_inv[1] = pixel_scale * predicted_flow_inv[1]
@@ -598,7 +604,7 @@ def apply_flow_to_image_with_unused_mask_inv(image, flow):
     # new_coords = np.subtract(coords, flow)
     new_coords = np.add(coords, flow)
     avg = utilityb.avg_edge_pixels(image)
-    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
 
     # mask = utilityb.create_hole_mask_inv(flow)
     # white_pixels = np.sum(mask > 0)
