@@ -132,18 +132,34 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path, o
         h, w = image1.shape[:2]
         image2 =  cv2.resize(img2_texture, (w,h), interpolation=cv2.INTER_LINEAR)
 
+        save_image(image1, os.path.join(output_dir, 'resized', f'{output_filename}.1.png' ))
+        save_image(image2, os.path.join(output_dir, 'resized', f'{output_filename}.2.png' ))
+
+        img1_lap = cv2.Laplacian(image1, -1, ksize=3)
+        img2_lap = cv2.Laplacian(image1, -1, ksize=3)
+        save_image(img1_lap, os.path.join(output_dir, 'img_lap', f'{output_filename}.1.png' ))
+        save_image(img2_lap, os.path.join(output_dir, 'img_lap', f'{output_filename}.2.png' ))
+
+
 
         img1_batch,img2_batch = infer(image1,image2)
         img1_batch,img2_batch = img1_batch.to(device), img2_batch.to(device)
 
         # for masking
         list_of_flows_rev = model(img1_batch, img2_batch)
+        # for i, f in enumerate(list_of_flows_rev):
+        #     f_img = flow_to_image(f[0]).to("cpu")
+        #     write_jpeg(f_img, os.path.join(output_dir, 'w', f'{output_filename}.flow_rev.{i}.png' ))
+
         predicted_flow_rev = list_of_flows_rev[-1][0]
         flow_img_rev = flow_to_image(predicted_flow_rev).to("cpu")
         predicted_flow_rev = predicted_flow_rev.detach().cpu().numpy()
 
         # reverse order
         list_of_flows_inv = model(img2_batch, img1_batch)
+        # for i, f in enumerate(list_of_flows_inv):
+        #     f_img = flow_to_image(f[0]).to("cpu")
+        #     write_jpeg(f_img, os.path.join(output_dir, 'w', f'{output_filename}.flow_inv.{i}.png' ))
         predicted_flow_inv = list_of_flows_inv[-1][0]
         flow_inv_img = flow_to_image(predicted_flow_inv).to("cpu")
         predicted_flow_inv = predicted_flow_inv.detach().cpu().numpy()
@@ -183,11 +199,108 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path, o
     max_dimension = max(provided_image.shape)
     w,h = get_target_size(provided_image, max_dimension)
     provided_image = cv2.resize(provided_image, (w,h), interpolation=cv2.INTER_LINEAR)
+
+    def apply_flow_to_image_with_unused_mask_inv(image, flow):
+        """
+        Apply an optical flow tensor to a NumPy image by moving the pixels based on the flow and create a mask where the remap meant there was nothing there.
+        
+        Args:
+            image (np.ndarray): Input image with shape (height, width, channels).
+            flow (np.ndarray): Optical flow tensor with shape (height, width, 2).
+            
+        Returns:
+            tuple: Warped image with the same shape as the input image, and a mask where the remap meant there was nothing there.
+        """
+
+        print('apply_flow_to_image_with_unused_mask_inv: START')
+
+        height, width, _ = image.shape
+        x_coords, y_coords = np.meshgrid(np.arange(width), np.arange(height))
+        coords = np.stack([x_coords, y_coords], axis=-1).astype(np.float32)
+
+        # Add the flow to the original coordinates
+        if isinstance(flow, torch.Tensor):
+            flow = flow.detach().cpu().numpy()
+
+        # --- flow (2, H, W)
+
+        # mask = flow.copy()
+        # mask_x, mask_y = mask
+        # mask[0] = np.subtract(mask_x, np.average(mask_x))
+        # mask[1] = np.subtract(mask_y, np.average(mask_y))
+        # white_pixels = np.sum(mask != 0)
+
+        flow = flow.transpose(1, 2, 0)
+        # new_coords = np.subtract(coords, flow)
+        new_coords = np.add(coords, flow)
+        avg = utilityb.avg_edge_pixels(image)
+        warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+
+        # mask = utilityb.create_hole_mask_inv(flow)
+        # white_pixels = np.sum(mask > 0)
+
+
+
+        # Create a mask where the remap meant there was nothing there
+        # if isinstance(flow_img, torch.Tensor):
+        #     flow_img = flow_img.detach().cpu().numpy()
+        # mask = Image.fromarray(flow_img).convert('L')
+
+        # Create a mask where the remap meant there was nothing there
+        # mask = utilityb.create_hole_mask(flow)
+        # white_pixels = np.sum(mask > 0)
+        #print(f'white pixels {white_pixels}')
+
+        #remove later
+        #warped_image = warp_image2(image,flow)
+
+        # return warped_image, mask, white_pixels
+        return warped_image
+
     warped_image = apply_flow_to_image_with_unused_mask_inv(provided_image,predicted_flow_inv)
+
+    # img1 = utilityb.base64_to_texture(image1_path)
+    # id1_img = apply_flow_to_image_with_unused_mask_inv(img1,predicted_flow_inv)
+    # id1_img = apply_flow_to_image_with_unused_mask_inv(id1_img,predicted_flow_rev)
+    # save_image(id1_img, os.path.join(output_dir, 'w', f'{output_filename}.identity1.png' ))
+    # id1_cmp_img = cv2.absdiff(img1, id1_img)
+    # save_image(id1_cmp_img, os.path.join(output_dir, 'w', f'{output_filename}.identity1.cmp.png' ))
+    # id1_img = apply_flow_to_image_with_unused_mask_inv(id1_img,predicted_flow_inv)
+    # id1_img = apply_flow_to_image_with_unused_mask_inv(id1_img,predicted_flow_rev)
+    # save_image(id1_img, os.path.join(output_dir, 'w', f'{output_filename}.identity1-2.png' ))
+    # id1_cmp_img = cv2.absdiff(img1, id1_img)
+    # save_image(cv2.absdiff(img1, id1_img), os.path.join(output_dir, 'w', f'{output_filename}.identity1-2.cmp.png' ))
+
+    # img2 = utilityb.base64_to_texture(image2_path)
+    # id2_img = apply_flow_to_image_with_unused_mask_inv(img2,predicted_flow_rev)
+    # id2_img = apply_flow_to_image_with_unused_mask_inv(id2_img,predicted_flow_inv)
+    # save_image(id2_img, os.path.join(output_dir, 'w', f'{output_filename}.identity2.png' ))
+    # id2_cmp_img = cv2.absdiff(img2, id2_img)
+    # save_image(id2_cmp_img, os.path.join(output_dir, 'w', f'{output_filename}.identity2.cmp.png' ))
+    # id2_img = apply_flow_to_image_with_unused_mask_inv(id2_img,predicted_flow_rev)
+    # id2_img = apply_flow_to_image_with_unused_mask_inv(id2_img,predicted_flow_inv)
+    # save_image(id2_img, os.path.join(output_dir, 'w', f'{output_filename}.identity2-2.png' ))
+    # id2_cmp_img = cv2.absdiff(img2, id2_img)
+    # save_image(cv2.absdiff(img2, id2_img), os.path.join(output_dir, 'w', f'{output_filename}.identity2-2-cmp.png' ))
+
+    img1 = utilityb.base64_to_texture(image1_path)
+    img2 = utilityb.base64_to_texture(image2_path)
+
+    id1to2_img = apply_flow_to_image_with_unused_mask_inv(img1,predicted_flow_inv)
+    save_image(id1to2_img, os.path.join(output_dir, 'identity1to2', f'{output_filename}.png' ))
+    id1to2_cmp_img = cv2.absdiff(img2, id1to2_img)
+    save_image(id1to2_cmp_img, os.path.join(output_dir, 'identity1to2_cmp', f'{output_filename}.png' ))
+
 
     # reverse flow for masking
     predicted_flow_rev = predicted_flow_rev.transpose(1, 2, 0)
-    unused_mask = utilityb.create_hole_mask(predicted_flow_rev)
+    unused_mask_0 = utilityb.create_hole_mask(predicted_flow_rev)
+
+    unused_mask = id1to2_cmp_img.copy()
+    unused_mask[unused_mask>=32] = 255
+    unused_mask = cv2.cvtColor(unused_mask, cv2.COLOR_BGR2GRAY)
+    unused_mask[unused_mask>=32] = 255
+    unused_mask[unused_mask!=255] = 0
     white_pixels = np.sum(unused_mask > 0)
 
     # First create the image with alpha channel
@@ -206,11 +319,11 @@ def apply_flow_based_on_images (image1_path, image2_path, provided_image_path, o
 
     warped_image_path=output_path
     save_image(warped_used_image, output_path)
-    save_image(warped_image, os.path.join(output_dir, 'w', f'{output_filename}.warped_raw.png' ))
-    save_image(unused_mask, os.path.join(output_dir, 'w', f'{output_filename}.unused_mask.png' ))
-    save_image(used_mask, os.path.join(output_dir, 'w', f'{output_filename}.used_mask.png' ))
-    write_jpeg(flow_img_rev, os.path.join(output_dir, 'w', f'{output_filename}.flow_rev.png' ))
-    write_jpeg(flow_inv_img, os.path.join(output_dir, 'w', f'{output_filename}.flow_inv.png' ))
+    save_image(warped_image, os.path.join(output_dir, 'warped_raw', f'{output_filename}.png' ))
+    save_image(unused_mask, os.path.join(output_dir, 'unused_mask', f'{output_filename}.png' ))
+    save_image(used_mask, os.path.join(output_dir, 'used_mask', f'{output_filename}.png' ))
+    save_flow_image(flow_img_rev, os.path.join(output_dir, 'flow_rev', f'{output_filename}.png' ))
+    save_flow_image(flow_inv_img, os.path.join(output_dir, 'flow_inv', f'{output_filename}.png' ))
 
     print('apply_flow_based_on_images: DONE, saved', warped_image_path)
     return warped_image_path,predicted_flow_inv,unused_mask,white_pixels,flow_inv_img
@@ -261,6 +374,11 @@ def save_image(image, file_path):
     if not Path(file_path).parent.exists():
         Path(file_path).parent.mkdir(parents=True)
     cv2.imwrite(file_path, image)
+
+def save_flow_image(image, file_path):
+    if not Path(file_path).parent.exists():
+        Path(file_path).parent.mkdir(parents=True)
+    write_jpeg(image, file_path)
 
 def resize_image(image, new_height,new_width):
     resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
@@ -568,64 +686,6 @@ def calculate_flow_inverse(flow):
     # print('calculate_flow_inverse: flow_inv', flow_inv)
 
     return flow_inv
-
-
-def apply_flow_to_image_with_unused_mask_inv(image, flow):
-    """
-    Apply an optical flow tensor to a NumPy image by moving the pixels based on the flow and create a mask where the remap meant there was nothing there.
-    
-    Args:
-        image (np.ndarray): Input image with shape (height, width, channels).
-        flow (np.ndarray): Optical flow tensor with shape (height, width, 2).
-        
-    Returns:
-        tuple: Warped image with the same shape as the input image, and a mask where the remap meant there was nothing there.
-    """
-
-    print('apply_flow_to_image_with_unused_mask_inv: START')
-
-    height, width, _ = image.shape
-    x_coords, y_coords = np.meshgrid(np.arange(width), np.arange(height))
-    coords = np.stack([x_coords, y_coords], axis=-1).astype(np.float32)
-
-    # Add the flow to the original coordinates
-    if isinstance(flow, torch.Tensor):
-        flow = flow.detach().cpu().numpy()
-
-    # --- flow (2, H, W)
-
-    # mask = flow.copy()
-    # mask_x, mask_y = mask
-    # mask[0] = np.subtract(mask_x, np.average(mask_x))
-    # mask[1] = np.subtract(mask_y, np.average(mask_y))
-    # white_pixels = np.sum(mask != 0)
-
-    flow = flow.transpose(1, 2, 0)
-    # new_coords = np.subtract(coords, flow)
-    new_coords = np.add(coords, flow)
-    avg = utilityb.avg_edge_pixels(image)
-    warped_image = cv2.remap(image, new_coords, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
-
-    # mask = utilityb.create_hole_mask_inv(flow)
-    # white_pixels = np.sum(mask > 0)
-
-
-
-    # Create a mask where the remap meant there was nothing there
-    # if isinstance(flow_img, torch.Tensor):
-    #     flow_img = flow_img.detach().cpu().numpy()
-    # mask = Image.fromarray(flow_img).convert('L')
-
-    # Create a mask where the remap meant there was nothing there
-    # mask = utilityb.create_hole_mask(flow)
-    # white_pixels = np.sum(mask > 0)
-    #print(f'white pixels {white_pixels}')
-
-    #remove later
-    #warped_image = warp_image2(image,flow)
-
-    # return warped_image, mask, white_pixels
-    return warped_image
 
 
 def apply_flow_to_image_with_unused_mask(image, flow):
