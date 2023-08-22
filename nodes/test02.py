@@ -37,6 +37,7 @@ from pathlib import Path
 from custom_nodes.comfyui_ricklove.nodes.ext.TemporalKit.optical_flow_raft import (apply_flow_based_on_images)
 import custom_nodes.comfyui_ricklove.nodes.image_analysis.image_quality as image_quality
 import custom_nodes.comfyui_ricklove.nodes.image_analysis.optical_flow as optical_flow
+import custom_nodes.comfyui_ricklove.nodes.image_analysis.optical_flow_dip as optical_flow_dip
 import folder_paths
 
 def load_image( infilename ) :
@@ -72,19 +73,36 @@ def apply_flow_range(i_first, i_last, r, from_path_prefix, to_path_prefix, from_
                 folder_paths.models_dir
             )
 
-    for to_index in range(i_first,i_last+1):
-        for from_index in range(to_index-r,to_index+r+1):
-            if from_index < i_first: continue
-            if from_index > i_last: continue
+    do_analyze1 = False
+    if do_analyze1:
+        for to_index in range(i_first,i_last+1):
+            for from_index in range(to_index-r,to_index+r+1):
+                if from_index < i_first: continue
+                if from_index > i_last: continue
 
-            optical_flow.analyze_image_flow(
-                f"{from_path_prefix}{from_index:05}.png",
-                f"{to_path_prefix}{to_index:05}.png", 
-                f'{from_index:05}',
-                f'{to_index:05}',
-                f'{output_path_prefix}/flow', 
-                folder_paths.models_dir
-            )
+                optical_flow.analyze_image_flow(
+                    f"{from_path_prefix}{from_index:05}.png",
+                    f"{to_path_prefix}{to_index:05}.png", 
+                    f'{from_index:05}',
+                    f'{to_index:05}',
+                    f'{output_path_prefix}/flow', 
+                    folder_paths.models_dir
+                )
+
+    do_analyze_dip = True
+    if do_analyze_dip:
+        output_path_dip = f'{output_path_prefix}/flow_dip'
+        if not Path(output_path_dip).exists():
+            Path(output_path_dip).mkdir(parents=True)
+
+        optical_flow_dip.analyze_flow(
+            f"{from_path_prefix}",
+            output_path_dip, 
+            folder_paths.models_dir,
+            i_first,
+            i_last,
+            r,
+        )
 
     #         apply_flow(to_index,from_index, from_path_prefix, to_path_prefix, from_ref_path_prefix, f'{output_path_prefix}/w')
 
@@ -95,13 +113,36 @@ def apply_flow_range(i_first, i_last, r, from_path_prefix, to_path_prefix, from_
 # i_last = 100
 # r = 5
 
-apply_flow_range(250, 270,
-    5, 
-    f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out",
-    f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out",
-    f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out",
-    f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/_out_test")
+
+# apply_flow_range(250, 270,
+#     5, 
+#     f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out",
+#     f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out",
+#     f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out",
+#     f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/_out_test")
     # f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/_out_test/{int(time.time())}")
+
+
+# apply_flow_range(1, 15,
+#     5, 
+#     f"D:/Projects/ai/data/unclean/lz-13/IMG_5804/video/out",
+#     f"D:/Projects/ai/data/unclean/lz-13/IMG_5804/video/out",
+#     f"D:/Projects/ai/data/unclean/lz-13/IMG_5804/video/out",
+#     f"D:/Projects/ai/data/unclean/lz-13/IMG_5804/_out_test")
+
+# apply_flow_range(1, 15,
+#     5, 
+#     f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out",
+#     f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out",
+#     f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out",
+#     f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/_out_test")
+
+apply_flow_range(55, 85,
+    5, 
+    f"D:/Projects/ai/data/unclean/lz-50/IMG_8416/video/out",
+    f"D:/Projects/ai/data/unclean/lz-50/IMG_8416/video/out",
+    f"D:/Projects/ai/data/unclean/lz-50/IMG_8416/video/out",
+    f"D:/Projects/ai/data/unclean/lz-50/IMG_8416/_out_test")
 
 
     # # img_from = f"D:/Projects/ai/data/unclean/lz-01/lz-01-enhanced/video/out{from_index:05}.png"
@@ -158,3 +199,5 @@ apply_flow_range(250, 270,
 # apply_flow(7,11)
 # apply_flow(7,12)
 # apply_flow(7,13)
+
+#../../../../python_embeded/python.exe test02.py

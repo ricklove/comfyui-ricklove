@@ -49,6 +49,8 @@ def analyze_image_flow(imageA_path, imageB_path, working_nameA, working_nameB, w
         return f'{working_path}/{kind}/{working_name}.{ext}'
     
     def save_flow_image(flow, path):
+        if flow.dtype != torch.float:
+            flow = torch.from_numpy(flow)
         flow_img = flow_to_image(flow)
         flow_img = flow_img.to("cpu").numpy()
         # flow_img.shape (3, 640, 480) -> (3{rgb}, H, W)
@@ -57,11 +59,15 @@ def analyze_image_flow(imageA_path, imageB_path, working_nameA, working_nameB, w
         #  (3, H, W) => (H, W, 3)
         flow_img = np.transpose(flow_img, (1,2,0))
         flow_img = cv2.cvtColor(flow_img, cv2.COLOR_RGB2BGR)
-        save_image(flow_img, f'{path}')
+        save_image(flow_img, f'{path}')      
     
-    def calculate_flow_data():
-        flow_a2b_path = get_file_name('flow', f'{working_nameB}_{working_nameA}', 'flo.npy')
-        flow_b2a_path = get_file_name('flow', f'{working_nameA}_{working_nameB}', 'flo.npy')
+    def calculate_flow_data(noise=0):
+        '''
+        returns flow.shape = (2,H,W)
+        '''
+
+        flow_a2b_path = get_file_name('flow', f'{working_nameB}_{working_nameA}', f'flo.{noise}.npy')
+        flow_b2a_path = get_file_name('flow', f'{working_nameA}_{working_nameB}', f'flo.{noise}.npy')
 
         if (os.path.exists(flow_a2b_path) 
             & os.path.exists(flow_b2a_path)):
@@ -69,6 +75,19 @@ def analyze_image_flow(imageA_path, imageB_path, working_nameA, working_nameB, w
 
         imageA = load_image_bgr(imageA_path)
         imageB = load_image_bgr(imageB_path)
+        h,w,_ = imageA.shape
+
+        # if noise > 0:
+        #     imageA = np.clip(imageA + noise, 0, 255)
+        #     imageB = np.clip(imageB + noise, 0, 255)
+        offset = noise
+        if offset > 0:
+            off8 = int(round(math.ceil(offset/8)*8))
+            imageA = np.pad(imageA, ((0,off8),(0,off8),(0,0)))
+            imageB = np.pad(imageB, ((offset,off8-offset),(offset,off8-offset),(0,0)))
+        save_image(imageA, get_file_name('flow', f'{working_nameA}', f'offset_{offset:02}.a.png'))
+        save_image(imageB, get_file_name('flow', f'{working_nameB}', f'offset_{offset:02}.b.png'))
+
 
         def infer(frameA, frameB):
             # print('infer: loading raft model')
@@ -104,26 +123,147 @@ def analyze_image_flow(imageA_path, imageB_path, working_nameA, working_nameB, w
         imageA_batch,imageB_batch = imageA_batch.to(device), imageB_batch.to(device)
 
         def calculate_flow(a,b, path):
-            if (os.path.exists(path)):
-                return np.load(path)
-        
             list_of_flows = model(a,b)
             predicted_flow = list_of_flows[-1][0]
-            save_flow_image(predicted_flow, f'{path}.png')
-
             predicted_flow = predicted_flow.detach().cpu().numpy()
-            np.save(path, predicted_flow)
-
             return predicted_flow
 
 
         flow_a2b = calculate_flow(imageA_batch, imageB_batch, flow_a2b_path)
         flow_b2a = calculate_flow(imageB_batch, imageA_batch, flow_b2a_path)
 
+        if offset > 0:
+            # (2,H,W)
+            flow_a2b = flow_a2b - offset
+            flow_b2a = flow_b2a + offset
+            flow_a2b = flow_a2b[0:2,0:h,0:w]
+            flow_b2a = flow_b2a[0:2,offset:h+offset,offset:w+offset]
+
+        save_flow_image(flow_a2b, f'{flow_a2b_path}.png')
+        save_flow_image(flow_b2a, f'{flow_b2a_path}.png')
+        np.save(flow_a2b_path, flow_a2b)
+        np.save(flow_b2a_path, flow_b2a)
+
         return flow_a2b,flow_b2a
     
-    flow_a2b,flow_b2a = calculate_flow_data()
+    def warp_with_inverse_flow(image_path, flow_inv, path):
+        '''
+        im.shape = (H,W,3bgr)
+        flow.shape = (2,H,W)
+        '''
+
+        im = load_image_bgr(image_path)
+        h,w,_ = im.shape
+        # coords.shape = (2,w,h) => (h,w,2)
+        coords = np.indices((w,h), dtype=np.float32).transpose(2, 1, 0)
+        flow_inv = flow_inv.transpose(1, 2, 0)
+        flow_inv_abs = coords + flow_inv
+
+        warped_image = cv2.remap(im, flow_inv_abs, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+        save_image(warped_image, f'{path}.png')
+        return warped_image
+    
+    def warp_round_trip(image_path, flow_backward, flow_forward, path, MAX_DIFF=32):
+        '''
+        im.shape = (H,W,3bgr)
+        flow.shape = (2,H,W)
+        '''
+
+        im = load_image_bgr(image_path)
+        h,w,_ = im.shape
+        # coords.shape = (2,w,h) => (h,w,2)
+        def do_warp(im, flow_inv):
+            coords = np.indices((w,h), dtype=np.float32).transpose(2, 1, 0)
+            flow_inv = flow_inv.transpose(1, 2, 0)
+            flow_inv_abs = coords + flow_inv
+
+            return cv2.remap(im, flow_inv_abs, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+        
+        warped_image = do_warp(im, flow_backward)
+        warped_image = do_warp(warped_image, flow_forward)
+        save_image(warped_image, f'{path}.round_trip.png')
+
+        # (H,W,3bgr)
+        im_std = np.abs(1.0 * warped_image - im, dtype=np.float32)
+        save_image(im_std, f'{path}.round_trip.std.png')
+
+        warped_black = np.max(warped_image, axis=2)
+        warped_black = np.where(warped_black>1,0,255)
+
+        flow_mask = np.max(im_std, axis=2)
+        flow_mask = np.where(flow_mask>MAX_DIFF,255,0)
+        flow_mask = np.max([flow_mask, warped_black], axis=0)
+        
+        save_image(flow_mask, f'{path}.round_trip.flow_mask.png')
+
+        return warped_image, flow_mask
+    
+    def warp_with_mask(image_from_path, image_to_path, flow_inv, flow_mask, path):
+        '''
+        im.shape = (H,W,3bgr)
+        flow.shape = (2,H,W)
+        '''
+
+        # binary inverse mask
+        flow_mask = np.where(flow_mask<=0,255,0)
+        flow_mask = np.array([flow_mask,flow_mask,flow_mask]).transpose(1,2,0)
+
+        warped = warp_with_inverse_flow(image_from_path, flow_inv, path)
+        h,w,_ = warped.shape
+        # im_default = load_image_bgr(image_to_path)
+        im_default = np.zeros((h,w,3))
+        im_masked = (im_default * (255.0-flow_mask) + warped * flow_mask) / 256.0
+
+        save_image(im_masked, f'{path}.image_masked.png')
+
+        return im_masked
+    
+    flow_data_count = 4
+    flow_datas_a2b = []
+    flow_datas_b2a = []
+    flow_masks_a2b = []
+    flow_masks_b2a = []
+    for i in range(0, flow_data_count):
+        flow_a2b_n,flow_b2a_n = calculate_flow_data(i)
+        flow_datas_a2b.append(flow_a2b_n)
+        flow_datas_b2a.append(flow_b2a_n)
+        warp_with_inverse_flow(imageB_path, flow_a2b_n, get_file_name('warped', f'{working_nameA}_{working_nameB}', f'warped.{i:02}'))
+        warp_with_inverse_flow(imageA_path, flow_b2a_n, get_file_name('warped', f'{working_nameB}_{working_nameA}', f'warped.{i:02}'))
+        _, flow_mask_a2b = warp_round_trip(imageB_path, flow_a2b_n, flow_b2a_n, get_file_name('warp_rt', f'{working_nameB}_{working_nameA}_{working_nameB}', f'warp_rt.a.{i:02}'))
+        _, flow_mask_b2a = warp_round_trip(imageA_path, flow_b2a_n, flow_a2b_n, get_file_name('warp_rt', f'{working_nameA}_{working_nameB}_{working_nameA}', f'warp_rt.b.{i:02}'))
+        flow_masks_a2b.append(flow_mask_a2b)
+        flow_masks_b2a.append(flow_mask_b2a)
+
+    flow_a2b = np.average(flow_datas_a2b, axis=0)
+    flow_b2a = np.average(flow_datas_b2a, axis=0)
+    flow_a2b_std = 4 * np.max(np.std(flow_datas_a2b, axis=0), axis=0)
+    flow_b2a_std = 4 * np.max(np.std(flow_datas_b2a, axis=0), axis=0)
+    save_image(flow_a2b_std, get_file_name('flow_std', f'{working_nameB}_{working_nameA}', f'std_4.png'))
+    save_image(flow_b2a_std, get_file_name('flow_std', f'{working_nameA}_{working_nameB}', f'std_4.png'))
+
+    flow_mask_a2b = np.average(flow_masks_a2b, axis=0)
+    flow_mask_b2a = np.average(flow_masks_b2a, axis=0)
+    save_image(flow_mask_a2b, get_file_name('warp_rt', f'{working_nameB}_{working_nameA}_{working_nameB}', f'warp_rt.a.ave.round_trip.flow_mask.png'))
+    save_image(flow_mask_b2a, get_file_name('warp_rt', f'{working_nameA}_{working_nameB}_{working_nameA}', f'warp_rt.b.ave.round_trip.flow_mask.png'))
+    save_image(flow_mask_a2b, get_file_name('flow_mask', f'{working_nameB}_{working_nameA}_{working_nameB}', f'warp_rt.a.ave.round_trip.flow_mask.png'))
+    save_image(flow_mask_b2a, get_file_name('flow_mask', f'{working_nameA}_{working_nameB}_{working_nameA}', f'warp_rt.b.ave.round_trip.flow_mask.png'))
+
+    save_flow_image(torch.from_numpy(flow_a2b), get_file_name('flow', f'{working_nameB}_{working_nameA}', f'flo.npy.png'))
+    save_flow_image(torch.from_numpy(flow_b2a), get_file_name('flow', f'{working_nameA}_{working_nameB}', f'flo.npy.png'))
+
+    save_image(load_image_bgr(imageA_path), get_file_name('warped', f'{working_nameA}', f'orig.png'))
+    save_image(load_image_bgr(imageB_path), get_file_name('warped', f'{working_nameB}', f'orig.png'))
+    warp_with_inverse_flow(imageB_path, flow_a2b, get_file_name('warped', f'{working_nameA}_{working_nameB}', f'warped'))
+    warp_with_inverse_flow(imageA_path, flow_b2a, get_file_name('warped', f'{working_nameB}_{working_nameA}', f'warped'))
+    warp_round_trip(imageB_path, flow_a2b, flow_b2a, get_file_name('warp_rt', f'{working_nameB}_{working_nameA}_{working_nameB}', f'warp_rt.a'))
+    warp_round_trip(imageA_path, flow_b2a, flow_a2b, get_file_name('warp_rt', f'{working_nameA}_{working_nameB}_{working_nameA}', f'warp_rt.b'))
+
+    warp_with_mask(imageB_path, imageA_path, flow_a2b, flow_mask_a2b, get_file_name('warp_masked', f'{working_nameA}_{working_nameB}', f'warp_masked.a'))
+    warp_with_mask(imageA_path, imageB_path, flow_b2a, flow_mask_b2a, get_file_name('warp_masked', f'{working_nameB}_{working_nameA}', f'warp_masked.b'))
+
     # print('flow', flow_a2b.shape, flow_b2a.shape)
+
+    return
 
     debug_name = '.015'
 
@@ -421,22 +561,5 @@ def analyze_image_flow(imageA_path, imageB_path, working_nameA, working_nameB, w
     flow_inv_b_from_a = calculate_inverse_flow(flow_a2b, get_file_name('flow_inv', f'{working_nameB}_{working_nameA}', 'flo.inv.npy'))
     flow_inv_a_from_b = calculate_inverse_flow(flow_b2a, get_file_name('flow_inv', f'{working_nameA}_{working_nameB}', 'flo.inv.npy'))
 
-    def warp_with_flow(image_path, flow_inv, path):
-        '''
-        im.shape = (H,W,3bgr)
-        flow.shape = (2,H,W)
-        '''
-
-        im = load_image_bgr(image_path)
-        h,w,_ = im.shape
-        # coords.shape = (2,w,h) => (h,w,2)
-        coords = np.indices((w,h), dtype=np.float32).transpose(2, 1, 0)
-        flow_inv = flow_inv.transpose(1, 2, 0)
-        flow_inv_abs = coords + flow_inv
-
-        warped_image = cv2.remap(im, flow_inv_abs, None, interpolation=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
-        save_image(warped_image, f'{path}.png')
-        return warped_image
-
-    warped_a2b = warp_with_flow(imageA_path, flow_inv_b_from_a, get_file_name('warped', f'{working_nameB}_{working_nameA}', 'warped'))
-    warped_b2a = warp_with_flow(imageB_path, flow_inv_a_from_b, get_file_name('warped', f'{working_nameA}_{working_nameB}', 'warped'))
+    warped_a2b = warp_with_inverse_flow(imageA_path, flow_inv_b_from_a, get_file_name('warped', f'{working_nameB}_{working_nameA}', 'warped'))
+    warped_b2a = warp_with_inverse_flow(imageB_path, flow_inv_a_from_b, get_file_name('warped', f'{working_nameA}_{working_nameB}', 'warped'))
