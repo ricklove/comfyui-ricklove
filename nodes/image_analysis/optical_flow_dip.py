@@ -28,8 +28,8 @@ def analyze_flow(image_path_prefix, out_path, models_dir, i_start, i_end, i_rang
 
     test_mode = False
     warm_start  = False
-    iters_cool = 20
-    iters_warm = 12
+    iters_cool = 30
+    iters_warm = 20
     iters_warm_count = 1
     max_offset = 256
 
@@ -41,37 +41,49 @@ def analyze_flow(image_path_prefix, out_path, models_dir, i_start, i_end, i_rang
     model.load_state_dict(pre_train, strict=False)
     model.eval()
 
-    flow_prev = None
-
     with torch.no_grad():
-        for i in range(i_start, i_end+1):
-            if flow_prev is not None:
-                flow_prev = -flow_prev
-                # flow_prev = None
-            torch.cuda.empty_cache()
+        for r_rad in range(0, i_range):
+            for r_flip in range(0,1+1):
+                r = r_rad * (1 if r_flip == 0 else -1)
+                if r == 0 & r_rad != 0: continue
 
-            img_path1 = f'{image_path_prefix}{i:05}.png'
-            img1 = load_image(img_path1)
-            save_image(img1, f'{out_path}/orig/{i:05}.orig.a.png')
+                print_with_time(f'r {r} START')
 
-            for j in range(i_start, i_end+1):
-                if abs(i-j) >= i_range: continue
+                flow_prev = None
+                img_path2 = None
+                img2 = None
+                image2 = None
+                torch.cuda.empty_cache()
 
-                img_path2 = f'{image_path_prefix}{j:05}.png'
-                img2 = load_image(img_path2)
-                # save_image(img2, f'{out_path}/orig/{j:05}.orig.b.png')
+                for i in range(i_start, i_end+1):
+                    j = i + r
+                    if (j < i_start) | (j > i_end): continue
 
-                image1 = torch.from_numpy(img1).permute(2, 0, 1).float()
-                image1 = image1[None].to(DEVICE)
-
-                image2 = torch.from_numpy(img2).permute(2, 0, 1).float()
-                image2 = image2[None].to(DEVICE)
-
-                padder = InputPadder(image1.shape)
-                image1, image2 = padder.pad(image1, image2)
-
-                for iter in range(iters_warm_count):
+                    iter = 0
                     print_with_time(f'iter {i}:{j}:{iter} START')
+
+                    # img_path1 = img_path2
+                    # img1 = img2
+                    # image1 = image2
+
+                    # if image2 is None:
+                    img_path1 = f'{image_path_prefix}{i:05}.png'
+                    img1 = load_image(img_path1)
+                    save_image(img1, f'{out_path}/orig/{i:05}.orig.png')
+                    image1 = torch.from_numpy(img1).permute(2, 0, 1).float()
+                    image1 = image1[None].to(DEVICE)
+
+                    img_path2 = f'{image_path_prefix}{j:05}.png'
+                    img2 = load_image(img_path2)
+                    # save_image(img2, f'{out_path}/orig/{j:05}.orig.png')
+                    image2 = torch.from_numpy(img2).permute(2, 0, 1).float()
+                    image2 = image2[None].to(DEVICE)
+
+                    padder = InputPadder(image1.shape)
+                    image1_padded, image2_padded = padder.pad(image1, image2)
+
+
+                    print_with_time(f'iter {i}:{j}:{iter} loaded')
 
                     iter_name = f'.{iter:03}'
                     out_flow_path = f'{out_path}/flow/{j:05}_{i:05}.flow{iter_name}.npy'
@@ -87,10 +99,10 @@ def analyze_flow(image_path_prefix, out_path, models_dir, i_start, i_end, i_rang
 
                     if flow_prev is None:
                         print_with_time(f'running cool for {iters_cool}')
-                        flow_up = model(image1, image2, iters=iters_cool, init_flow=None)
+                        flow_up = model(image1_padded, image2_padded, iters=iters_cool, init_flow=None)
                     else:
                         print_with_time(f'running warm for {iters_warm}')
-                        flow_up = model(image1, image2, iters=iters_warm, init_flow=flow_prev)
+                        flow_up = model(image1_padded, image2_padded, iters=iters_warm, init_flow=flow_prev)
 
                     if not test_mode:
                         flow_up = flow_up[-1]

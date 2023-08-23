@@ -137,7 +137,7 @@ def apply_flow_range(i_first, i_last, r, from_path_prefix, to_path_prefix, from_
 #     f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/video/out",
 #     f"D:/Projects/ai/data/unclean/kn-05/MVI_3833/_out_test")
 
-apply_flow_range(60, 65,
+apply_flow_range(60, 70,
     5, 
     f"D:/Projects/ai/data/unclean/lz-50/IMG_8416/video/out",
     f"D:/Projects/ai/data/unclean/lz-50/IMG_8416/video/out",
