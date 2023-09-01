@@ -1,0 +1,1 @@
+ffmpeg -i input.mp4 out%05d.png

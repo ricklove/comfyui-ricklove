@@ -11,8 +11,8 @@ class RL_Optical_Flow_Dip:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "image_a": ("IMAGE",), 
-                "image_b": ("IMAGE",),
+                "image_to": ("IMAGE",), 
+                "image_from": ("IMAGE",),
                 "iters": ("INT",{"default": 20, "min": 1, "max": 1000, "step": 1}),
                 "max_offset_ratio": ("FLOAT",{"default": 0.5, "min": 0.01, "max": 1, "step": 0.01}),
             },
@@ -23,10 +23,10 @@ class RL_Optical_Flow_Dip:
 
     CATEGORY = "ricklove/flow"
 
-    def analyze_flow(self, image_a, image_b, iters=20, max_offset_ratio=0.5):
-        max_offset = max(image_a.shape) * max_offset_ratio
+    def analyze_flow(self, image_to, image_from, iters=20, max_offset_ratio=0.5):
+        max_offset = max(image_to.shape) * max_offset_ratio
         model = DipModel(max_offset)
-        flo, color_flow = model(image_a, image_b, iters,max_offset_ratio)
+        flo, color_flow = model(image_to, image_from, iters,max_offset_ratio)
         return (flo, np2tensor(color_flow),)
     
 class RL_Warp_Image:

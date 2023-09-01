@@ -20,16 +20,20 @@ class RL_Crop_Resize:
                 "mask": ("MASK",),
                 "padding": ("INT",{"default": 128, "min": 0, "max": 4096, "step": 1}),
                 "max_side_length": ("INT",{"default": 512, "min": 0, "max": 4096, "step": 1}),
-            }
+            },
+            "optional": {
+                "width": ("INT",{"default": 0, "min": 0, "max": 4096, "step": 1}),
+                "height": ("INT",{"default": 0, "min": 0, "max": 4096, "step": 1}),
+            },
         }
     
-    RETURN_TYPES = ("IMAGE", "MASK", "BBOX", "INT", "INT", "INT", "INT", "INT", "INT")
+    RETURN_TYPES = ("IMAGE", "MASK", "BBOX", "INT", "INT", "INT", "INT", "INT", "INT", "INT", "INT")
     RETURN_NAMES = ("cropped_image", "cropped_mask", "bbox_source", "top_source", "left_source", "right_source", "bottom_source", "width_source", "height_source", "width_result", "height_result")
     FUNCTION = "crop_resize"
     
     CATEGORY = "ricklove/image"
     
-    def crop_resize(self, image, mask, padding=24, max_side_length=512):
+    def crop_resize(self, image, mask, padding=24, max_side_length=512, width=0, height=0):
 
         mask_pil = Image.fromarray(np.clip(255. * mask.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
         image_pil = Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
@@ -49,8 +53,22 @@ class RL_Crop_Resize:
         hr = max_side_length / h_pad
         ratio = min(wr,hr)
 
+        if width > 0:
+            ratio = width / w_pad
+        if height > 0:
+            ratio = height / h_pad
+        if (width > 0) & (height > 0):
+            wr = width / w_pad
+            hr = height / h_pad
+            ratio = min(wr,hr)
+
         w_resized = int(w_pad * ratio / 32) * 32
         h_resized = int(h_pad * ratio / 32) * 32
+
+        if width > 0:
+            w_resized = width
+        if height > 0:
+            h_resized = height
 
         w_source = round(w_resized / ratio)
         h_source = round(h_resized / ratio)
@@ -59,6 +77,16 @@ class RL_Crop_Resize:
         t_source = t
         r_source = l_source + w_source
         b_source = t_source + h_source
+
+        if r_source > w:
+            r_diff = r_source - w
+            r_source = w
+            l_source = l_source - r_diff
+        if b_source > h:
+            b_diff = b_source - h
+            b_source = h
+            t_source = t_source - b_diff
+
 
         mask_cropped = mask_pil.crop((l_source,t_source,r_source,b_source))
         mask_resized = mask_cropped.resize((w_resized, h_resized), Image.Resampling.LANCZOS)
@@ -77,5 +105,5 @@ class RL_Crop_Resize:
         
         bbox_source = (t_source, l_source, r_source, b_source)
 
-        return (image_tensor, mask_tensor, bbox_source, t, l, r_source, b_source, w_source, h_source, w_resized, h_resized)
+        return (image_tensor, mask_tensor, bbox_source, t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized)
         
