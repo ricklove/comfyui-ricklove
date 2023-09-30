@@ -116,7 +116,7 @@ def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, 
 
     w = r_source-l_source+1
     h = b_source-t_source+1
-    paste_image = cropped_image_pil.resize((w,h))
+    paste_image = cropped_image_pil.resize((w,h), Image.Resampling.LANCZOS)
     print("paste_image.size", paste_image.size)
     print("paste_image.mode", paste_image.mode)
     print("paste_image.getbbox()", paste_image.getbbox())
@@ -204,7 +204,8 @@ class RL_Uncrop:
         
         for i,image_pil in enumerate(images_pil):
             cropped_image_pil = cropped_images_pil[i]
-            out_image = uncrop_image(image_pil, cropped_image_pil, box[0], box[1], box[2], box[3])
+            (t,l,r,b) = box
+            out_image = uncrop_image(image_pil, cropped_image_pil, t,l,r,b)
             out_images.append(out_image)
         
         return (pil2tensor(out_images),)
