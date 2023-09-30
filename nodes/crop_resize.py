@@ -24,6 +24,7 @@ class RL_Crop_Resize:
             "optional": {
                 "width": ("INT",{"default": 0, "min": 0, "max": 4096, "step": 1}),
                 "height": ("INT",{"default": 0, "min": 0, "max": 4096, "step": 1}),
+                "skip": ("BOOLEAN",{"default": False,}),
             },
         }
     
@@ -33,12 +34,15 @@ class RL_Crop_Resize:
     
     CATEGORY = "ricklove/image"
     
-    def crop_resize(self, image, mask, padding=24, max_side_length=512, width=0, height=0):
+    def crop_resize(self, image, mask, padding=24, max_side_length=512, width=0, height=0, skip=False):
 
         mask_pil = Image.fromarray(np.clip(255. * mask.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
         image_pil = Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
 
         [w,h] = mask_pil.size
+
+        if skip:
+            return (image, mask, (0, 0, w, h), 0, 0, w, h, w, h, w, h)
 
         (l,t,r,b) = mask_pil.getbbox()
         l = clamp(l - padding, 0, w)
