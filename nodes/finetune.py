@@ -152,14 +152,20 @@ class RL_Finetune_Analyze_Batch:
         "INT",
         "INT",
         "STRING",
+        "IMAGE",
+        "IMAGE",
+        "IMAGE",
         )
     RETURN_NAMES = (
         "score",
-        "consistency",
-        "difference",
-        "imageMainCount",
-        "imageCompareCount",
+        "inconsistencyScore",
+        "avePixelDifference",
+        "countImageMain",
+        "countImageCompare",
         "summary",
+        "imageDifferences",
+        "imageDifferenceAverage",
+        "deprecatedImage",
         )
     FUNCTION = "analyze"
     CATEGORY = "ricklove/Process"
@@ -170,57 +176,79 @@ class RL_Finetune_Analyze_Batch:
         imgCompCount = imagesCompare.shape[0]
 
         print(f'''RL_Finetune_Analyze_Batch: shapes 
+            {direction}
             {imagesMain.shape} 
             {imagesCompare.shape}''')
 
-        tensor_diff = None
-        tensor_consistency = None
-        last_frame_diff = None
+        # Get the difference of each pixel to the main
+        tensors_diff = []
         for i in range(imgCompCount):
             xMain = imagesMain[0] if i >= imgMainCount else imagesMain[i]
             xComp = imagesCompare[i]
 
             frameDiff = None
             if direction == 'both':
-                frameDiff = torch.abs(xMain-xComp) / imgCompCount  
-            if direction == 'reduce':              
-                frameDiff = (xMain-xComp) / imgCompCount 
+                frameDiff = 0.5 + 0.5 * torch.abs(xMain-xComp)
+            elif direction == 'reduce':
+                frameDiff = 0.5 + 0.5 * (xMain-xComp)
             else:
-                frameDiff = (xComp-xMain) / imgCompCount
+                frameDiff = 0.5 + 0.5 * (xComp-xMain)
 
-            frameCons = 0 if last_frame_diff is None else torch.abs(frameDiff - last_frame_diff)
-            last_frame_diff = frameDiff
+            # tensor_diff = (frameDiff / imgCompCount) if tensor_diff is None else tensor_diff + (frameDiff / imgCompCount)
+            tensors_diff.append(frameDiff)
+        diff_stack = torch.stack(tensors_diff)
 
-            tensor_consistency = frameCons if tensor_consistency is None else tensor_consistency + frameCons
-            tensor_diff = frameDiff if tensor_diff is None else tensor_diff + frameDiff
+        # Calculate the average pixel diff
+        ave_diff = 255 * (torch.mean(diff_stack).item() - 0.5)
 
 
-        # to numpy
-        np_diff = np.clip(255.0 * tensor_diff.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
-        np_consistency = np.clip(255.0 * tensor_consistency.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
+        inconsistencyScore = 0
 
-        ave_diff = np.average(np_diff)
-        ave_consistency = np.average(np_consistency)
+        if imgCompCount > 1:
+            # TODO: this does not make sense if the main image is changing, since the location of the changes is changing
+            # # get the average standard deviation of the pixel diffs
+            # stdOfPixelDiffs = (diff_stack-diff_stack) if imgCompCount <= 1 else torch.std(diff_stack, dim=0)
+            # inconsistencyScore = 255 * torch.mean(stdOfPixelDiffs).item()
 
-        # score = ave_diff if imgCount <= 1 else ave_diff / (ave_consistency+0.01)
-        score = ave_diff - ave_consistency
+            # Calculate histograms for each image and each channel
+            # then get the average std dev of each bin across the images
+
+            # Reshape the stack to (num_images, num_channels, num_pixels)
+            reshaped_stack = diff_stack.permute(0, 3, 1, 2).view(diff_stack.shape[0], diff_stack.shape[3], -1)
+            # print("Original shape:", diff_stack.shape)
+            # print("Reshaped shape:", reshaped_stack.shape)
+            
+            # Calculate histograms for each image and each channel
+            pixelCount = diff_stack.shape[1] * diff_stack.shape[2]
+            histogramRatios = []
+            for i in range(diff_stack.shape[0]):
+                for c in range(diff_stack.shape[3]):
+                    histogram = torch.histc(reshaped_stack[i, c], bins=256, min=0, max=1)
+                    histogramRatio = histogram / pixelCount
+                    histogramRatios.append(histogramRatio)
+
+            # Stack the histograms for (image, channel, bins)
+            histogramRatios = torch.stack(histogramRatios, dim=0).view(diff_stack.shape[0], diff_stack.shape[3], 256)
+            # print("histograms shape:", histogramRatios.shape)
+
+
+            stdOfHistogramBins = torch.std(histogramRatios, dim=0)
+            inconsistencyScore = 255 * torch.mean(stdOfHistogramBins).item()
+
+
+        score = ave_diff - inconsistencyScore
 
         sBar = min(int(score / 50.0 * 50), 50)
         sBarDec = int(score / 1.00 * 50) % 50
         
         bar = '█' * sBar + '-' * (50-sBar)
         barDec = '▲' * sBarDec + ' ' * (50-sBarDec)
-        summary = f'{score:.6f} = {ave_diff:.6f} - {ave_consistency:.6f}\n|{bar}|\n|{barDec}|'
+        summary = f'{score:.6f} = {ave_diff:.6f} - {inconsistencyScore:.6f}\n|{bar}|\n|{barDec}|'
 
-        return (score,ave_consistency,ave_diff,imgMainCount,imgCompCount,summary,)
+        result = (score,inconsistencyScore,ave_diff,imgMainCount,imgCompCount,summary,diff_stack,torch.mean(diff_stack, dim=0),imagesMain,)
 
-        # image = image.convert('L')
-        # hist = image.histogram()
+        # print(f'''RL_Finetune_Analyze_Batch: result 
+        #     {result}
+        #     ''')
+        return result
 
-        # sum = 0
-        # count = 0
-        # for i in range(256):
-        #     sum += hist[i] * i
-        #     count += hist[i]
-        
-        # ave_val = sum / count
