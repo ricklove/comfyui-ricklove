@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from typing import Union, List
 
@@ -107,7 +107,7 @@ def crop_resize_with_mask(image_pil:Image.Image, mask_pil:Image.Image, padding:i
 
     return (out_image, out_mask, bbox_source, t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized)
 
-def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, t_source:int, l_source:int, r_source:int, b_source:int):
+def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, t_source:int, l_source:int, r_source:int, b_source:int, blend:float):
     # cropped_image_pil.
     print("original_image_pil.size", original_image_pil.size)
     print("cropped_image_pil.size", cropped_image_pil.size)
@@ -116,15 +116,21 @@ def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, 
 
     w = r_source-l_source+1
     h = b_source-t_source+1
-    paste_image = cropped_image_pil.resize((w,h), Image.Resampling.LANCZOS)
-    print("paste_image.size", paste_image.size)
-    print("paste_image.mode", paste_image.mode)
-    print("paste_image.getbbox()", paste_image.getbbox())
-    print("w,h", [w,h])
-    print("paste_image.region", [l_source, t_source, r_source, b_source])
 
-    original_image_pil.paste(paste_image, [l_source, t_source])
-    return original_image_pil
+    cropped_image_pil = cropped_image_pil.resize((w,h), Image.Resampling.LANCZOS)
+    paste_image = Image.new('RGB', original_image_pil.size, (0,0,0))
+    paste_image.paste(cropped_image_pil, [l_source, t_source])
+
+    # mask
+    RADIUS = int(min(blend * w/2,blend * h/2))
+    mask = Image.new('L', (w,h), 0)
+    mask.paste(Image.new('L', (w-2*RADIUS,h-2*RADIUS), 255), (RADIUS,RADIUS))
+    mask = mask.filter(ImageFilter.GaussianBlur(RADIUS/2))
+    paste_mask = Image.new('L', original_image_pil.size, 0)
+    paste_mask.paste(mask, [l_source, t_source])
+
+    original_image_pil.paste(paste_image, paste_mask)
+    return (original_image_pil,paste_mask)
 
 
 class RL_Crop_Resize:
@@ -186,12 +192,12 @@ class RL_Uncrop:
                 "box": ("BBOX",)
             },
             "optional": {
-                "blend": ("FLOAT",{"default": 0.05, "min": 0, "max": 1, "step": 0.05}),
+                "blend": ("FLOAT",{"default": 0.10, "min": 0, "max": 1, "step": 0.01}),
             },
         }
     
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("image",)
+    RETURN_TYPES = ("IMAGE","IMAGE",)
+    RETURN_NAMES = ("image","blend_mask",)
     FUNCTION = "uncrop_image"
     
     CATEGORY = "ricklove/image"
@@ -201,14 +207,16 @@ class RL_Uncrop:
         images_pil = tensor2pil(image)
         cropped_images_pil = tensor2pil(cropped_image)
         out_images = []
+        out_blend_masks = []
         
         for i,image_pil in enumerate(images_pil):
             cropped_image_pil = cropped_images_pil[i]
             (t,l,r,b) = box
-            out_image = uncrop_image(image_pil, cropped_image_pil, t,l,r,b)
+            (out_image, blend_mask) = uncrop_image(image_pil, cropped_image_pil, t,l,r,b, blend)
             out_images.append(out_image)
+            out_blend_masks.append(blend_mask)
         
-        return (pil2tensor(out_images),)
+        return (pil2tensor(out_images),pil2tensor(out_blend_masks),)
 
 
 # class RL_Crop_Resize_Batch:
