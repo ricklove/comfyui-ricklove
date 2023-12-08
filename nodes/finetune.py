@@ -205,35 +205,37 @@ class RL_Finetune_Analyze_Batch:
         inconsistencyScore = 0
 
         if imgCompCount > 1:
-            # TODO: this does not make sense if the main image is changing, since the location of the changes is changing
-            # # get the average standard deviation of the pixel diffs
-            # stdOfPixelDiffs = (diff_stack-diff_stack) if imgCompCount <= 1 else torch.std(diff_stack, dim=0)
-            # inconsistencyScore = 255 * torch.mean(stdOfPixelDiffs).item()
+            # note: this does not make sense if the main image is changing, since the location of the changes is changing
+            # but it might be ok since it does minimize movement
+            # get the average standard deviation of the pixel diffs
+            stdOfPixelDiffs = (diff_stack-diff_stack) if imgCompCount <= 1 else torch.std(diff_stack, dim=0)
+            inconsistencyScore = 255 * torch.mean(stdOfPixelDiffs).item()
 
-            # Calculate histograms for each image and each channel
-            # then get the average std dev of each bin across the images
-
-            # Reshape the stack to (num_images, num_channels, num_pixels)
-            reshaped_stack = diff_stack.permute(0, 3, 1, 2).view(diff_stack.shape[0], diff_stack.shape[3], -1)
-            # print("Original shape:", diff_stack.shape)
-            # print("Reshaped shape:", reshaped_stack.shape)
             
-            # Calculate histograms for each image and each channel
-            pixelCount = diff_stack.shape[1] * diff_stack.shape[2]
-            histogramRatios = []
-            for i in range(diff_stack.shape[0]):
-                for c in range(diff_stack.shape[3]):
-                    histogram = torch.histc(reshaped_stack[i, c], bins=256, min=0, max=1)
-                    histogramRatio = histogram / pixelCount
-                    histogramRatios.append(histogramRatio)
+            # # Calculate histograms for each image and each channel
+            # # then get the average std dev of each bin across the images
 
-            # Stack the histograms for (image, channel, bins)
-            histogramRatios = torch.stack(histogramRatios, dim=0).view(diff_stack.shape[0], diff_stack.shape[3], 256)
-            # print("histograms shape:", histogramRatios.shape)
+            # # Reshape the stack to (num_images, num_channels, num_pixels)
+            # reshaped_stack = diff_stack.permute(0, 3, 1, 2).view(diff_stack.shape[0], diff_stack.shape[3], -1)
+            # # print("Original shape:", diff_stack.shape)
+            # # print("Reshaped shape:", reshaped_stack.shape)
+            
+            # # Calculate histograms for each image and each channel
+            # pixelCount = diff_stack.shape[1] * diff_stack.shape[2]
+            # histogramRatios = []
+            # for i in range(diff_stack.shape[0]):
+            #     for c in range(diff_stack.shape[3]):
+            #         histogram = torch.histc(reshaped_stack[i, c], bins=256, min=0, max=1)
+            #         histogramRatio = histogram / pixelCount
+            #         histogramRatios.append(histogramRatio)
+
+            # # Stack the histograms for (image, channel, bins)
+            # histogramRatios = torch.stack(histogramRatios, dim=0).view(diff_stack.shape[0], diff_stack.shape[3], 256)
+            # # print("histograms shape:", histogramRatios.shape)
 
 
-            stdOfHistogramBins = torch.std(histogramRatios, dim=0)
-            inconsistencyScore = 255 * torch.mean(stdOfHistogramBins).item()
+            # stdOfHistogramBins = torch.std(histogramRatios, dim=0)
+            # inconsistencyScore = 255 * torch.mean(stdOfHistogramBins).item()
 
 
         score = ave_diff - inconsistencyScore
