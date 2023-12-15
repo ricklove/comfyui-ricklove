@@ -50,7 +50,8 @@ def processZoeDept(depth, normMin, normMax, cutoffMin=None, cutoffMax=None):
 
     if cutoffMin is not None and cutoffMax is not None:
         depth = (depth - cutoffMin) / (cutoffMax - cutoffMin)
-        depth = np.clip(depth, 0, 1)
+        # Clip it to the max value at layer 1
+        depth = np.clip(depth, 0, 255.0/256)
 
     # extract precision into channels
     depth1 = depth.astype(np.uint8)

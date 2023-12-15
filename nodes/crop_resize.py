@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image, ImageFilter
+import math
 
 from typing import Union, List
 
@@ -40,6 +41,11 @@ def calculate_crop(mask_pil:Image.Image, padding:int, max_side_length:int, width
     [w,h] = mask_pil.size
 
     (l,t,r,b) = mask_pil.getbbox()
+    # l = math.floor(l/32)*32
+    # t = math.floor(t/32)*32
+    # r = math.ceil(r/32)*32
+    # b = math.ceil(b/32)*32
+
     l = clamp(l - padding, 0, w)
     t = clamp(t - padding, 0, h)
     r = clamp(r + padding, 0, w)

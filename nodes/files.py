@@ -9,7 +9,26 @@ import folder_paths
 from pathlib import Path
 import json
 
+from typing import Union, List
+
 # Based on mtb
+def tensor2pil(image: torch.Tensor) -> List[Image.Image]:
+    batch_count = 1
+    if len(image.shape) > 3:
+        batch_count = image.size(0)
+
+    if batch_count > 1:
+        out = []
+        for i in range(batch_count):
+            out.extend(tensor2pil(image[i]))
+        return out
+
+    return [
+        Image.fromarray(
+            np.clip(255.0 * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
+        )
+    ]
+
 class RL_SaveImageSequence:
     """Save an image sequence to a folder. The current frame is used to determine which image to save.
 
@@ -28,6 +47,16 @@ class RL_SaveImageSequence:
                 "path": ("STRING", {"default": "videos/#####.png"}),
                 "current_frame": ("INT", {"default": 0, "min": 0, "max": 9999999}),
             },
+            "optional": {
+                "count": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 9999999},
+                ),
+                "select_every_nth": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 9999999},
+                ),
+            },
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
@@ -43,27 +72,29 @@ class RL_SaveImageSequence:
         images,
         path,
         current_frame=0,
+        # count is ignored since it will get the length from the images
+        count=1, 
+        select_every_nth=1,
         prompt=None,
         extra_pnginfo=None,
     ):
 
-        if len(images) > 1:
-            raise ValueError("Can only save one image at a time")
+        images = tensor2pil(images)
+        for i,img in enumerate(images):
+            c = i * select_every_nth + current_frame
+            resolved_path = resolve_path(path, c)
+            resolved_img = Path(self.output_dir) / resolved_path
+            resolved_dir = resolved_img.parent
+            resolved_dir.mkdir(parents=True, exist_ok=True)
 
-        resolved_img = Path(self.output_dir) / resolve_path(path, current_frame)
-        resolved_dir = resolved_img.parent
-        resolved_dir.mkdir(parents=True, exist_ok=True)
+            metadata = PngInfo()
+            if prompt is not None:
+                metadata.add_text("prompt", json.dumps(prompt))
+            if extra_pnginfo is not None:
+                for x in extra_pnginfo:
+                    metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
-        output_image = images[0].cpu().numpy()
-        img = Image.fromarray(np.clip(output_image * 255.0, 0, 255).astype(np.uint8))
-        metadata = PngInfo()
-        if prompt is not None:
-            metadata.add_text("prompt", json.dumps(prompt))
-        if extra_pnginfo is not None:
-            for x in extra_pnginfo:
-                metadata.add_text(x, json.dumps(extra_pnginfo[x]))
-
-        img.save(resolved_img, pnginfo=metadata, compress_level=4)
+            img.save(resolved_img, pnginfo=metadata, compress_level=4)
         return {
             "ui": {
                 "images": [
@@ -92,6 +123,16 @@ class RL_LoadImageSequence:
                     "INT",
                     {"default": 0, "min": 0, "max": 9999999},
                 ),
+            },
+            "optional": {
+                "count": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 9999999},
+                ),
+                "select_every_nth": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 9999999},
+                ),
             }
         }
 
@@ -107,10 +148,26 @@ class RL_LoadImageSequence:
         "mask",
         "current_frame",
     )
-    OUTPUT_NODE = True
+    # OUTPUT_NODE = True
 
-    def load_image(self, path, current_frame=0):
+    def load_image(self, path, current_frame=0, count=1, select_every_nth=1):
         print(f"Loading image: {path}, {current_frame}")
+
+        if(count > 1):
+            images = []
+            masks = []
+            for i in range(0, count):
+                c = i * select_every_nth + current_frame
+                resolved_path = resolve_path(path, c)
+                image_path = folder_paths.get_annotated_filepath(resolved_path)
+                if not os.path.exists(image_path):
+                    continue
+                image, mask = img_from_path(image_path)
+                images.append(image)
+                masks.append(mask)
+                
+            return (torch.cat(images, dim=0), torch.cat(masks, dim=0), current_frame)
+
         resolved_path = resolve_path(path, current_frame)
         image_path = folder_paths.get_annotated_filepath(resolved_path)
         image, mask = img_from_path(image_path)
@@ -121,7 +178,7 @@ class RL_LoadImageSequence:
         )
 
     @staticmethod
-    def IS_CHANGED(path="", current_frame=0):
+    def IS_CHANGED(path="", current_frame=0, **kwargs):
         print(f"Checking if changed: {path}, {current_frame}")
         resolved_path = resolve_path(path, current_frame)
         image_path = folder_paths.get_annotated_filepath(resolved_path)
