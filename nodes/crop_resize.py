@@ -38,6 +38,8 @@ def tensor2pil(image: torch.Tensor) -> List[Image.Image]:
     ]
 
 def calculate_crop(mask_pil:Image.Image, padding:int, max_side_length:int, width:int, height:int):
+    print(f"calculate_crop START p={padding} m={max_side_length} wh=({width},{height}) {mask_pil}")
+
     [w,h] = mask_pil.size
 
     (l,t,r,b) = mask_pil.getbbox()
@@ -95,18 +97,61 @@ def calculate_crop(mask_pil:Image.Image, padding:int, max_side_length:int, width
     r_source = r_source - 1 
     b_source = b_source - 1 
 
-    return (t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized)
+    result = CropSize(l_source, t_source, r_source, b_source, w_source, h_source, w_resized, h_resized)
+    print(f"calculate_crop END p={padding} m={max_side_length} wh=({width},{height}) result={result}")
+    return result
 
-def crop_resize_with_mask(image_pil:Image.Image, mask_pil:Image.Image, padding:int, max_side_length:int, width:int, height:int):
+class CropSize:
+    def __init__(self, l_source: int, t_source: int, r_source: int, b_source: int, w_source: int, h_source: int, w_resized: int, h_resized: int):
+        self.l_source = int(l_source)
+        self.t_source = int(t_source)
+        self.r_source = int(r_source)
+        self.b_source = int(b_source)
+        self.w_source = int(w_source)
+        self.h_source = int(h_source)
+        self.w_resized = int(w_resized)
+        self.h_resized = int(h_resized)
 
-    (t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized) = calculate_crop(mask_pil, padding, max_side_length, width, height)
-    print(f'crop_resize_with_mask {(max_side_length, width, height)} out:{(t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized)}')
+    @property
+    def lrtbwh_source_and_wh_resized(self):
+        return self.lrtb_source + self.wh_source + self.wh_resized
 
-    mask_cropped = mask_pil.crop((l_source,t_source,r_source,b_source))
-    mask_resized = mask_cropped.resize((w_resized, h_resized), Image.Resampling.LANCZOS)
+    @property
+    def lrtb_source(self):
+        return (
+            self.l_source,
+            self.t_source,
+            self.r_source,
+            self.b_source, 
+        )
+    
+    @property
+    def wh_source(self):
+        return (
+            self.w_source,
+            self.h_source,
+        )
+    
+    @property
+    def wh_resized(self):
+        return (
+            self.w_resized,
+            self.h_resized,
+        )
+    
+    def __str__(self):
+        return f'{self.lrtb_source};{self.wh_source}=>{self.wh_resized}'
 
-    image_cropped = image_pil.crop((l_source,t_source,r_source,b_source))
-    image_resized = image_cropped.resize((w_resized, h_resized), Image.Resampling.LANCZOS)
+
+
+def crop_resize_image_and_mask(image_pil:Image.Image, mask_pil:Image.Image, cropSize: CropSize):
+    print(f"crop_resize_image_and_mask {cropSize}")
+
+    mask_cropped = mask_pil.crop(cropSize.lrtb_source)
+    mask_resized = mask_cropped.resize(cropSize.wh_resized, Image.Resampling.LANCZOS)
+
+    image_cropped = image_pil.crop(cropSize.lrtb_source)
+    image_resized = image_cropped.resize(cropSize.wh_resized, Image.Resampling.LANCZOS)
 
     # mask_pil.crop(bbox)
 
@@ -119,8 +164,7 @@ def crop_resize_with_mask(image_pil:Image.Image, mask_pil:Image.Image, padding:i
     # region_mask, crop_data = self.WT.Masking.crop_region(mask_pil, region_type, padding)
     # region_tensor = pil2mask(ImageOps.invert(region_mask)).unsqueeze(0).unsqueeze(1)
     
-    bbox_source = (t_source, l_source, r_source, b_source)
-    return (out_image, out_mask, bbox_source, t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized)
+    return (out_image, out_mask)
 
 def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, t_source:int, l_source:int, r_source:int, b_source:int, blend:float):
     # cropped_image_pil.
@@ -161,10 +205,16 @@ class RL_Crop_Resize:
                 "max_side_length": ("INT",{"default": 512, "min": 0, "max": 4096, "step": 1}),
             },
             "optional": {
+                # if !mask => the image is only resized
                 "mask": ("MASK",),
                 "width": ("INT",{"default": 0, "min": 0, "max": 4096, "step": 1}),
                 "height": ("INT",{"default": 0, "min": 0, "max": 4096, "step": 1}),
                 "skip": ("BOOLEAN",{"default": False,}),
+                # if interpolate => the main mask is only cropped
+                "interpolate_mask_a": ("MASK",),
+                "interpolate_mask_b": ("MASK",),
+                # TODO: support interpolate_ratio list so that this can work on batchImages
+                "interpolate_ratio": ("FLOAT",{"default": 0, "min": 0, "max": 1, "step": 0.01}),
             },
         }
     
@@ -174,41 +224,77 @@ class RL_Crop_Resize:
     
     CATEGORY = "ricklove/image"
     
-    def crop_resize(self, image, mask=None, padding=24, max_side_length=512, width=0, height=0, skip=False):
+    def crop_resize(self, image, mask=None, padding=24, max_side_length=512, width=0, height=0, skip=False, 
+                    interpolate_mask_a=None, 
+                    interpolate_mask_b=None,
+                    interpolate_ratio=0
+                    ):
 
-        print(f'crop_resize {image.shape} {mask.shape if mask is not None else None}')
+        print(f'crop_resize {image.shape} {mask.shape if mask is not None else None} {interpolate_mask_a.shape if interpolate_mask_a is not None else None} {interpolate_mask_b.shape if interpolate_mask_b is not None else None}')
 
-        images_pil = tensor2pil(image)
+        image_pils = tensor2pil(image)
 
-        [w,h] = images_pil[0].size
+        [w,h] = image_pils[0].size
 
         if skip:
             return (image, mask, (0, 0, w, h), 0, 0, w, h, w, h, w, h)
         
-        masks_pil = tensor2pil(mask.unsqueeze(-1)) if mask is not None else None
+        mask_pils = tensor2pil(mask.unsqueeze(-1)) if mask is not None else None
+        interpolate_mask_pil_a = tensor2pil(interpolate_mask_a.unsqueeze(-1)) if interpolate_mask_a is not None else None
+        interpolate_mask_pil_b = tensor2pil(interpolate_mask_b.unsqueeze(-1)) if interpolate_mask_b is not None else interpolate_mask_pil_a
+        interpolate_mask_pil_a = interpolate_mask_pil_a[0] if interpolate_mask_pil_a is not None else None
+        interpolate_mask_pil_b = interpolate_mask_pil_b[0] if interpolate_mask_pil_b is not None else None
+
         mask_solid = Image.new('L', (w, h), 255)
 
         out_images = []
         out_masks = []
+        # out_bboxes = []
+        # out_cropSizes = []
 
         w_max = 0
         h_max = 0
+
+        # if mask is batch, then keep all at the same size
         if mask is not None:
-            for mask_pil in masks_pil:
-                (t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized) = calculate_crop(mask_pil, padding, max_side_length, width, height)
-                w_max = max(w_max, w_resized)
-                h_max = max(h_max, h_resized)
+            for mask_pil in mask_pils:
+                cropSize = calculate_crop(mask_pil, padding, max_side_length, width, height)
+                w_max = max(w_max, cropSize.w_resized)
+                h_max = max(h_max, cropSize.h_resized)
+
+        if interpolate_mask_pil_a is not None:
+            print(f'interpolate_mask_pil: {interpolate_mask_pil_a} {interpolate_mask_pil_b}')
+            w_max = 0
+            h_max = 0
+            for mask_pil in (interpolate_mask_pil_a, interpolate_mask_pil_b):
+                cropSize = calculate_crop(mask_pil, padding, max_side_length, width, height)
+                w_max = max(w_max, cropSize.w_resized)
+                h_max = max(h_max, cropSize.h_resized)
+
+        width = width if w_max == 0 else w_max
+        height = height if h_max == 0 else h_max
         
-        for (i, image_pil) in enumerate(images_pil):
-            mask_pil = masks_pil[min(i, len(masks_pil) - 1)] if mask is not None else mask_solid
+        for (i, image_pil) in enumerate(image_pils):
+            mask_pil = mask_pils[min(i, len(mask_pils) - 1)] if mask is not None else mask_solid
 
-            print(f'crop_resize: for ${image_pil} ${mask_pil}')
+            cropSize = calculate_crop(mask_pil, padding, max_side_length, width, height)
+            if interpolate_mask_pil_a is not None:
+                cropSizeA = calculate_crop(interpolate_mask_pil_a, padding, max_side_length, width, height)
+                cropSizeB = calculate_crop(interpolate_mask_pil_b, padding, max_side_length, width, height)
+                t = max(0, min(1, interpolate_ratio))
+                cropSize = CropSize(*tuple(x1 + t * (x2 - x1) for x1, x2 in zip(cropSizeA.lrtbwh_source_and_wh_resized, cropSizeB.lrtbwh_source_and_wh_resized)))
+        
 
-            (out_image, out_mask, bbox_source, t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized) = crop_resize_with_mask(image_pil, mask_pil, padding, max_side_length, w_max, h_max)
+            (out_image, out_mask) = crop_resize_image_and_mask(image_pil, mask_pil, cropSize)
+
+            print(f'crop_resize: {(max_side_length, width, height)} out:{cropSize}')
             out_images.append(out_image)
             out_masks.append(out_mask)
-        
-        return (pil2tensor(out_images), pil2tensor(out_masks), bbox_source, t_source, l_source, r_source, b_source, w_source, h_source, w_resized, h_resized)
+            # out_bboxes.append(cropSize.lrtb_source)
+            # out_cropSizes.append(cropSize.lrtbwh_source_and_wh_resized)
+
+        # NOTE: only the last size is returned
+        return (pil2tensor(out_images), pil2tensor(out_masks),) + (cropSize.lrtb_source) + cropSize.lrtbwh_source_and_wh_resized
 
 class RL_Uncrop:
     def __init__(self):

@@ -95,17 +95,19 @@ class RL_SaveImageSequence:
                     metadata.add_text(x, json.dumps(extra_pnginfo[x]))
 
             img.save(resolved_img, pnginfo=metadata, compress_level=4)
-        return {
-            "ui": {
-                "images": [
-                    {
-                        "filename": resolved_img.name,
-                        "subfolder": resolved_dir.name,
-                        "type": self.type,
-                    }
-                ]
-            }
-        }
+            
+        return ()
+        # return {
+        #     "ui": {
+        #         "images": [
+        #             {
+        #                 "filename": resolved_img.name,
+        #                 "subfolder": resolved_dir.name,
+        #                 "type": self.type,
+        #             }
+        #         ]
+        #     }
+        # }
 
 
 class RL_LoadImageSequence:
