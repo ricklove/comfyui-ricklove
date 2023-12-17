@@ -113,11 +113,11 @@ class CropSize:
         self.h_resized = int(h_resized)
 
     @property
-    def lrtbwh_source_and_wh_resized(self):
-        return self.lrtb_source + self.wh_source + self.wh_resized
+    def ltrbwh_source_and_wh_resized(self):
+        return self.ltrb_source + self.wh_source + self.wh_resized
 
     @property
-    def lrtb_source(self):
+    def ltrb_source(self):
         return (
             self.l_source,
             self.t_source,
@@ -140,17 +140,17 @@ class CropSize:
         )
     
     def __str__(self):
-        return f'{self.lrtb_source};{self.wh_source}=>{self.wh_resized}'
+        return f'{self.ltrb_source};{self.wh_source}=>{self.wh_resized}'
 
 
 
 def crop_resize_image_and_mask(image_pil:Image.Image, mask_pil:Image.Image, cropSize: CropSize):
     print(f"crop_resize_image_and_mask {cropSize}")
 
-    mask_cropped = mask_pil.crop(cropSize.lrtb_source)
+    mask_cropped = mask_pil.crop(cropSize.ltrb_source)
     mask_resized = mask_cropped.resize(cropSize.wh_resized, Image.Resampling.LANCZOS)
 
-    image_cropped = image_pil.crop(cropSize.lrtb_source)
+    image_cropped = image_pil.crop(cropSize.ltrb_source)
     image_resized = image_cropped.resize(cropSize.wh_resized, Image.Resampling.LANCZOS)
 
     # mask_pil.crop(bbox)
@@ -219,7 +219,7 @@ class RL_Crop_Resize:
         }
     
     RETURN_TYPES = ("IMAGE", "MASK", "BBOX", "INT", "INT", "INT", "INT", "INT", "INT", "INT", "INT")
-    RETURN_NAMES = ("cropped_image", "cropped_mask", "bbox_source", "top_source", "left_source", "right_source", "bottom_source", "width_source", "height_source", "width_result", "height_result")
+    RETURN_NAMES = ("cropped_image", "cropped_mask", "bbox_source", "left_source", "top_source", "right_source", "bottom_source", "width_source", "height_source", "width_result", "height_result")
     FUNCTION = "crop_resize"
     
     CATEGORY = "ricklove/image"
@@ -282,7 +282,7 @@ class RL_Crop_Resize:
                 cropSizeA = calculate_crop(interpolate_mask_pil_a, padding, max_side_length, width, height)
                 cropSizeB = calculate_crop(interpolate_mask_pil_b, padding, max_side_length, width, height)
                 t = max(0, min(1, interpolate_ratio))
-                cropSize = CropSize(*tuple(x1 + t * (x2 - x1) for x1, x2 in zip(cropSizeA.lrtbwh_source_and_wh_resized, cropSizeB.lrtbwh_source_and_wh_resized)))
+                cropSize = CropSize(*tuple(x1 + t * (x2 - x1) for x1, x2 in zip(cropSizeA.ltrbwh_source_and_wh_resized, cropSizeB.ltrbwh_source_and_wh_resized)))
         
 
             (out_image, out_mask) = crop_resize_image_and_mask(image_pil, mask_pil, cropSize)
@@ -290,11 +290,11 @@ class RL_Crop_Resize:
             print(f'crop_resize: {(max_side_length, width, height)} out:{cropSize}')
             out_images.append(out_image)
             out_masks.append(out_mask)
-            # out_bboxes.append(cropSize.lrtb_source)
-            # out_cropSizes.append(cropSize.lrtbwh_source_and_wh_resized)
+            # out_bboxes.append(cropSize.ltrb_source)
+            # out_cropSizes.append(cropSize.ltrbwh_source_and_wh_resized)
 
         # NOTE: only the last size is returned
-        return (pil2tensor(out_images), pil2tensor(out_masks),) + (cropSize.lrtb_source) + cropSize.lrtbwh_source_and_wh_resized
+        return (pil2tensor(out_images), pil2tensor(out_masks), cropSize.ltrb_source) + cropSize.ltrbwh_source_and_wh_resized
 
 class RL_Uncrop:
     def __init__(self):
