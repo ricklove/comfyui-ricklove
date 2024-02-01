@@ -42,7 +42,12 @@ def calculate_crop(mask_pil:Image.Image, padding:int, max_side_length:int, width
 
     [w,h] = mask_pil.size
 
-    (l,t,r,b) = mask_pil.getbbox()
+    mask_bbox = mask_pil.getbbox()
+    if mask_bbox is None:
+        print (f"Mask is empty")
+        mask_bbox = (0,0,w,h)
+    
+    (l,t,r,b) = mask_bbox
     # l = math.floor(l/32)*32
     # t = math.floor(t/32)*32
     # r = math.ceil(r/32)*32

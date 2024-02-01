@@ -17,15 +17,21 @@ import comfy.model_management
 from custom_nodes.comfy_controlnet_preprocessors.v11.zoe.zoedepth.utils.misc import colorize, save_raw_16bit
 from PIL import Image
 
-def processZoeDept(depth, normMin, normMax, cutoffMin=None, cutoffMax=None):
+def processZoeDept(depth, normMin, normMax, cutoffMin=None, cutoffMax=None, cutoffByMask=None):
     # --- manually create rgb
     if isinstance(depth, torch.Tensor):
         depth = depth.squeeze().cpu().numpy()
 
-    # norm = False
-    # normMin = 2
-    # normMax = 85
-    
+    if isinstance(cutoffByMask, torch.Tensor):
+        cutoffByMask = cutoffByMask.squeeze().cpu().numpy()
+
+    # if cutoffByMask is not None:
+    #     print(f'processZoeDept: cutoffByMask shapes: {depth.shape} {cutoffByMask.shape}')
+    #     print(f'processZoeDept: cutoffByMask BEFORE depthRange: ({np.min(depth)}-{np.max(depth)})')
+    #     depth = depth[cutoffByMask > 0]
+    #     print(f'processZoeDept: cutoffByMask AFTER depthRange: ({np.min(depth)}-{np.max(depth)})')
+
+        
     norm = True
     # normMin = 2
     # normMax = 60
@@ -34,19 +40,26 @@ def processZoeDept(depth, normMin, normMax, cutoffMin=None, cutoffMax=None):
         depth = depth.squeeze()
         # invalid_mask = depth == -99
         # mask = np.logical_not(invalid_mask)
-        mask = np.logical_not(False)
+        # mask = np.logical_not(False)
+        mask = (cutoffByMask!=0) if cutoffByMask is not None else np.logical_not(False)
 
-        # invert colors because everything is negative?
+        # invert colors because everything is inverted?
         nMin = normMax
         nMax = normMin
 
         vmin = np.percentile(depth[mask],nMin)
         vmax = np.percentile(depth[mask],nMax)
+        print(f'processZoeDept: normValueRange ({vmin}-{vmax})')
         if vmin != vmax:
             depth = (depth - vmin) / (vmax - vmin)  # vmin..vmax
+            print(f'processZoeDept: corrected depthRange: ({np.min(depth)}-{np.max(depth)})')
         else:
             # Avoid 0-division
             depth = depth * 0.
+
+    # if cutoffByMask is not None:
+    #     cutoffMin = 0
+    #     cutoffMax = 1
 
     if cutoffMin is not None and cutoffMax is not None:
         depth = (depth - cutoffMin) / (cutoffMax - cutoffMin)
@@ -254,34 +267,63 @@ class RL_Zoe_Depth_Map_Preprocessor_Raw_Infer:
             
         return (out_list,torch.cat(byte_images, dim=0).cpu(),)
     
+
+def get_custom_shape_string(obj):
+    if isinstance(obj, (list, tuple, np.ndarray, torch.Tensor)):
+        if isinstance(obj, np.ndarray):
+            return f"{(obj.shape)}"
+        if isinstance(obj, torch.Tensor):
+            return f"{(obj.shape)}"
+        else:
+            label = "L" if isinstance(obj, list) else "t"
+            inner_shapes = ",".join(get_custom_shape_string(item) for item in obj)
+            return f"{label}[{inner_shapes}]" if inner_shapes else f"{label}"
+    else:
+        return str(obj)
+
+def tensor2List(image: torch.Tensor):
+    batch_count = 1
+    if len(image.shape) > 3:
+        batch_count = image.size(0)
+
+    if batch_count > 1:
+        out = []
+        for i in range(batch_count):
+            out.extend(tensor2List(image[i]))
+        return out
+
+    return [
+        np.clip(255.0 * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
+    ]
 class RL_Zoe_Depth_Map_Preprocessor_Raw_Process:
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "zoeRaw": ("ZOE_RAW",),
+            },
+            "optional": {
                 "normMin": ("INT", {
-                    "default": 2, 
+                    "default": 0, 
                     "min": 0,
                     "max": 100,
                     "step": 1               
                 }),
                 "normMax": ("INT", {
-                    "default": 85, 
+                    "default": 100, 
                     "min": 0,
                     "max": 100,
                     "step": 1                   
                 }),
-            },
-            "optional": {
                 "cutoffMid": ("FLOAT", {
-                    "default": 0.5, 
+                    "default": 0.25, 
                     "step": 0.001,
                 }),
                 "cutoffRadius": ("FLOAT", {
-                    "default": 0.001, 
+                    "default": 0.25, 
                     "step": 0.001,
                 }),
+                "cutoffByMask": ("MASK",),
             },
         }
 
@@ -290,13 +332,20 @@ class RL_Zoe_Depth_Map_Preprocessor_Raw_Process:
 
     CATEGORY = "preprocessors/normal_depth_map"
 
-    def estimate_depth(self, zoeRaw, normMin, normMax, cutoffMid = None, cutoffRadius = None):
+    def estimate_depth(self, zoeRaw, normMin=0, normMax=100, cutoffMid = None, cutoffRadius = None, cutoffByMask = None):
         # Ref: https://github.com/lllyasviel/ControlNet-v1-1-nightly/blob/main/gradio_depth.py
+
+        if cutoffByMask is not None:
+            print(f'processZoeDept: zoeRaw={get_custom_shape_string(zoeRaw)} cutoffByMask={get_custom_shape_string(cutoffByMask)}')
+            cutoffByMask = tensor2List(cutoffByMask)
+
         out_list = []
-        for (call_result_raw, H, W, C,) in zoeRaw:
-            call_result = processZoeDept(call_result_raw, normMin, normMax, 
-                                         None if cutoffMid is None or cutoffRadius is None else cutoffMid-cutoffRadius, 
-                                         None if cutoffMid is None or cutoffRadius is None else cutoffMid+cutoffRadius)
+        for (i, (call_result_raw, H, W, C,)) in enumerate(zoeRaw):
+            mask_item = cutoffByMask[min(i, len(cutoffByMask) - 1)] if cutoffByMask is not None else None
+            call_result = processZoeDept(call_result_raw, normMin, normMax,
+                                         None if cutoffMid is None or cutoffRadius is None or cutoffRadius <= 0 else cutoffMid-cutoffRadius, 
+                                         None if cutoffMid is None or cutoffRadius is None or cutoffRadius <= 0 else cutoffMid+cutoffRadius,
+                                         mask_item)
 
             # resized = call_result
 
