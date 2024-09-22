@@ -6,8 +6,9 @@ from .nodes.finetune import RL_Finetune_Variable, RL_Finetune_Analyze, RL_Finetu
 from .nodes.files import RL_SaveImageSequence, RL_LoadImageSequence
 from .nodes.depth_16 import RL_Zoe_Depth_Map_Preprocessor, RL_Zoe_Depth_Map_Preprocessor_Raw_Infer, RL_Zoe_Depth_Map_Preprocessor_Raw_Process
 from .nodes.internet_search import RL_Internet_Search
-
-
+from .nodes.dependency_order import RL_ForceDependencyOrder, RL_ForceDependencyOrder_Latents, RL_ForceDependencyOrder_Images, RL_ForceDependencyOrder_ImageString
+from .nodes.lora_tools import RL_LoraTextExtractTags
+from .nodes.civitai_tools import RL_CivitaiTopImagePrompts
 
 NODE_CLASS_MAPPINGS = {
     "RL_Crop_Resize": RL_Crop_Resize,
@@ -26,6 +27,12 @@ NODE_CLASS_MAPPINGS = {
     "RL_Zoe_Depth_Map_Preprocessor_Raw_Infer": RL_Zoe_Depth_Map_Preprocessor_Raw_Infer,
     "RL_Zoe_Depth_Map_Preprocessor_Raw_Process": RL_Zoe_Depth_Map_Preprocessor_Raw_Process,
     "RL_Internet_Search": RL_Internet_Search,
+    "RL_ForceDependencyOrder": RL_ForceDependencyOrder,
+    "RL_ForceDependencyOrder_Latents": RL_ForceDependencyOrder_Latents,
+    "RL_ForceDependencyOrder_Images": RL_ForceDependencyOrder_Images,
+    "RL_ForceDependencyOrder_ImageString": RL_ForceDependencyOrder_ImageString,
+    "RL_LoraTextExtractTags": RL_LoraTextExtractTags,
+    "RL_CivitaiTopImagePrompts": RL_CivitaiTopImagePrompts,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -45,4 +52,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RL_Zoe_Depth_Map_Preprocessor_Raw_Infer": "RL_Zoe_Depth_Map_Preprocessor_Raw_Infer",
     "RL_Zoe_Depth_Map_Preprocessor_Raw_Process": "RL_Zoe_Depth_Map_Preprocessor_Raw_Process",
     "RL_Internet_Search": "RL_Internet_Search",
+    "RL_ForceDependencyOrder": "RL_ForceDependencyOrder",
+    "RL_ForceDependencyOrder_Latents": "RL_ForceDependencyOrder_Latents",
+    "RL_ForceDependencyOrder_Images": "RL_ForceDependencyOrder_Images",
+    "RL_ForceDependencyOrder_ImageString": "RL_ForceDependencyOrder_ImageString",
+    "RL_LoraTextExtractTags": "RL_LoraTextExtractTags",
+    "RL_CivitaiTopImagePrompts": "RL_CivitaiTopImagePrompts",
 }
