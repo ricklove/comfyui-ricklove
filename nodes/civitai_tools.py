@@ -58,7 +58,7 @@ class RL_CivitaiTopImagePrompts:
             # get the civitaiResources if it exists on the meta object
             if 'civitaiResources' in item['meta']:
                 for resource in item['meta']['civitaiResources']:
-                    if resource['type'] == 'lora':
+                    if 'type' in resource and resource['type'] == 'lora':
                         civitaiResources.append({'type': 'lora', 'modelVersionId': resource['modelVersionId'], 'weight': resource['weight']})
         
             result.append({'id': item['id'], 'prompt': prompt, 'civitaiResources': civitaiResources})
