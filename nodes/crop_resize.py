@@ -299,7 +299,7 @@ class RL_Crop_Resize:
             # out_cropSizes.append(cropSize.ltrbwh_source_and_wh_resized)
 
         # NOTE: only the last size is returned
-        return (pil2tensor(out_images), pil2tensor(out_masks), cropSize.ltrb_source) + cropSize.ltrbwh_source_and_wh_resized
+        return (pil2tensor(out_images), pil2tensor(out_masks), [cropSize.ltrb_source]) + cropSize.ltrbwh_source_and_wh_resized
 
 class RL_Uncrop:
     def __init__(self):
