@@ -6,7 +6,7 @@ from .nodes.finetune import RL_Finetune_Variable, RL_Finetune_Analyze, RL_Finetu
 from .nodes.files import RL_SaveImageSequence, RL_LoadImageSequence
 from .nodes.depth_16 import RL_Zoe_Depth_Map_Preprocessor, RL_Zoe_Depth_Map_Preprocessor_Raw_Infer, RL_Zoe_Depth_Map_Preprocessor_Raw_Process
 from .nodes.internet_search import RL_Internet_Search
-from .nodes.dependency_order import RL_ForceDependencyOrder, RL_ForceDependencyOrder_Latents, RL_ForceDependencyOrder_Images, RL_ForceDependencyOrder_ImageString
+from .nodes.dependency_order import RL_ForceDependencyOrder, RL_ForceDependencyOrder_Latents, RL_ForceDependencyOrder_Images, RL_ForceDependencyOrder_Strings, RL_ForceDependencyOrder_ImageString, RL_StopIfBlack, RL_RebootComfyIfLeaky
 from .nodes.lora_tools import RL_LoraTextExtractTags
 from .nodes.civitai_tools import RL_CivitaiTopImagePrompts
 
@@ -30,7 +30,10 @@ NODE_CLASS_MAPPINGS = {
     "RL_ForceDependencyOrder": RL_ForceDependencyOrder,
     "RL_ForceDependencyOrder_Latents": RL_ForceDependencyOrder_Latents,
     "RL_ForceDependencyOrder_Images": RL_ForceDependencyOrder_Images,
+    "RL_ForceDependencyOrder_Strings": RL_ForceDependencyOrder_Strings,   
     "RL_ForceDependencyOrder_ImageString": RL_ForceDependencyOrder_ImageString,
+    "RL_RebootComfyIfLeaky": RL_RebootComfyIfLeaky,
+    "RL_StopIfBlack": RL_StopIfBlack,
     "RL_LoraTextExtractTags": RL_LoraTextExtractTags,
     "RL_CivitaiTopImagePrompts": RL_CivitaiTopImagePrompts,
 }
@@ -55,7 +58,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RL_ForceDependencyOrder": "RL_ForceDependencyOrder",
     "RL_ForceDependencyOrder_Latents": "RL_ForceDependencyOrder_Latents",
     "RL_ForceDependencyOrder_Images": "RL_ForceDependencyOrder_Images",
+    "RL_ForceDependencyOrder_Strings": "RL_ForceDependencyOrder_Strings",
     "RL_ForceDependencyOrder_ImageString": "RL_ForceDependencyOrder_ImageString",
+    "RL_StopIfBlack": "RL_StopIfBlack",
+    "RL_RebootComfyIfLeaky": "RL_RebootComfyIfLeaky",
     "RL_LoraTextExtractTags": "RL_LoraTextExtractTags",
     "RL_CivitaiTopImagePrompts": "RL_CivitaiTopImagePrompts",
 }
