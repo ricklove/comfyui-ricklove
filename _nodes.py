@@ -1,4 +1,4 @@
-from .nodes.crop_resize import RL_Crop_Resize, RL_Uncrop
+from .nodes.crop_resize import RL_Crop_Resize, RL_Uncrop, RL_BBox
 from .nodes.image_shadow import RL_Image_Shadow
 from .nodes.optical_flow import RL_Optical_Flow_Dip, RL_Warp_Image
 from .nodes.image_threshold import RL_Image_Threshold_Channels
@@ -11,6 +11,7 @@ from .nodes.lora_tools import RL_LoraTextExtractTags
 from .nodes.civitai_tools import RL_CivitaiTopImagePrompts
 
 NODE_CLASS_MAPPINGS = {
+    "RL_BBox": RL_BBox,
     "RL_Crop_Resize": RL_Crop_Resize,
     "RL_Uncrop": RL_Uncrop,
     # "RL_Crop_Resize_Batch": RL_Crop_Resize_Batch,
@@ -39,29 +40,30 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "RL_Crop_Resize": "Image Crop and Resize by Mask",
-    "RL_Uncrop": "Image Uncrop",
+    "RL_BBox": "RL BBox",
+    "RL_Crop_Resize": "RL Image Crop and Resize by Mask",
+    "RL_Uncrop": "RL Image Uncrop",
     # "RL_Crop_Resize_Batch": "Image Crop and Resize by Mask (Batch)",
-    "RL_Image_Shadow": "Image Shadow",
-    "RL_Optical_Flow_Dip": "Optical Flow (Dip)",
-    "RL_Warp_Image": "Warp Image with Flow",
-    "RL_Image_Threshold_Channels": "Image Threshold (Channels)",
-    "RL_Finetune_Variable": "Finetune Variable",
-    "RL_Finetune_Analyze": "Finetune Analyze",
-    "RL_Finetune_Analyze_Batch": "Finetune Analyze Batch",
-    "RL_SaveImageSequence": "RL_SaveImageSequence",
-    "RL_LoadImageSequence": "RL_LoadImageSequence",
-    "RL_Zoe_Depth_Map_Preprocessor": "RL_Zoe_Depth_Map_Preprocessor",
-    "RL_Zoe_Depth_Map_Preprocessor_Raw_Infer": "RL_Zoe_Depth_Map_Preprocessor_Raw_Infer",
-    "RL_Zoe_Depth_Map_Preprocessor_Raw_Process": "RL_Zoe_Depth_Map_Preprocessor_Raw_Process",
-    "RL_Internet_Search": "RL_Internet_Search",
-    "RL_ForceDependencyOrder": "RL_ForceDependencyOrder",
-    "RL_ForceDependencyOrder_Latents": "RL_ForceDependencyOrder_Latents",
-    "RL_ForceDependencyOrder_Images": "RL_ForceDependencyOrder_Images",
-    "RL_ForceDependencyOrder_Strings": "RL_ForceDependencyOrder_Strings",
-    "RL_ForceDependencyOrder_ImageString": "RL_ForceDependencyOrder_ImageString",
-    "RL_StopIfBlack": "RL_StopIfBlack",
-    "RL_RebootComfyIfLeaky": "RL_RebootComfyIfLeaky",
-    "RL_LoraTextExtractTags": "RL_LoraTextExtractTags",
-    "RL_CivitaiTopImagePrompts": "RL_CivitaiTopImagePrompts",
+    "RL_Image_Shadow": "RL Image Shadow",
+    "RL_Optical_Flow_Dip": "RL Optical Flow (Dip)",
+    "RL_Warp_Image": "RL Warp Image with Flow",
+    "RL_Image_Threshold_Channels": "RL Image Threshold (Channels)",
+    "RL_Finetune_Variable": "RL Finetune Variable",
+    "RL_Finetune_Analyze": "RL Finetune Analyze",
+    "RL_Finetune_Analyze_Batch": "RL Finetune Analyze Batch",
+    "RL_SaveImageSequence": "RL SaveImageSequence",
+    "RL_LoadImageSequence": "RL LoadImageSequence",
+    "RL_Zoe_Depth_Map_Preprocessor": "RL Zoe Depth Map Preprocessor",
+    "RL_Zoe_Depth_Map_Preprocessor_Raw_Infer": "RL Zoe Depth Map Preprocessor Raw Infer",
+    "RL_Zoe_Depth_Map_Preprocessor_Raw_Process": "RL Zoe Depth Map Preprocessor Raw Process",
+    "RL_Internet_Search": "RL Internet Search",
+    "RL_ForceDependencyOrder": "RL ForceDependencyOrder",
+    "RL_ForceDependencyOrder_Latents": "RL ForceDependencyOrder Latents",
+    "RL_ForceDependencyOrder_Images": "RL ForceDependencyOrder Images",
+    "RL_ForceDependencyOrder_Strings": "RL ForceDependencyOrder Strings",
+    "RL_ForceDependencyOrder_ImageString": "RL ForceDependencyOrder ImageString",
+    "RL_StopIfBlack": "RL StopIfBlack",
+    "RL_RebootComfyIfLeaky": "RL RebootComfyIfLeaky",
+    "RL_LoraTextExtractTags": "RL LoraTextExtractTags",
+    "RL_CivitaiTopImagePrompts": "RL CivitaiTopImagePrompts",
 }

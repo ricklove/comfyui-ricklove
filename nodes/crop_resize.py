@@ -171,19 +171,18 @@ def crop_resize_image_and_mask(image_pil:Image.Image, mask_pil:Image.Image, crop
     
     return (out_image, out_mask)
 
-def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, t_source:int, l_source:int, r_source:int, b_source:int, blend:float):
+def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, bbox:tuple[int,int,int,int], blend:float):
     # cropped_image_pil.
     print("original_image_pil.size", original_image_pil.size)
     print("cropped_image_pil.size", cropped_image_pil.size)
     print("original_image_pil.mode", original_image_pil.mode)
     print("cropped_image_pil.mode", cropped_image_pil.mode)
 
-    w = r_source-l_source+1
-    h = b_source-t_source+1
+    (l,t,w,h) = bbox
 
     cropped_image_pil = cropped_image_pil.resize((w,h), Image.Resampling.LANCZOS)
     paste_image = Image.new('RGB', original_image_pil.size, (0,0,0))
-    paste_image.paste(cropped_image_pil, [l_source, t_source])
+    paste_image.paste(cropped_image_pil, [l, t])
 
     # mask
     RADIUS = int(min(blend * w/2,blend * h/2))
@@ -191,11 +190,92 @@ def uncrop_image(original_image_pil:Image.Image, cropped_image_pil:Image.Image, 
     mask.paste(Image.new('L', (w-2*RADIUS,h-2*RADIUS), 255), (RADIUS,RADIUS))
     mask = mask.filter(ImageFilter.GaussianBlur(RADIUS/2))
     paste_mask = Image.new('L', original_image_pil.size, 0)
-    paste_mask.paste(mask, [l_source, t_source])
+    paste_mask.paste(mask, [l, t])
 
     original_image_pil.paste(paste_image, paste_mask)
     return (original_image_pil,paste_mask)
 
+class RL_BBox:
+    def __init__(self):
+        return
+        
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+            },
+            "optional": {
+                # if !mask => the image is only resized
+                "bbox": ("BBOX",),
+                "xMin_left": ("INT",),
+                "yMin_top": ("INT",),
+                "xSize_width": ("INT",),
+                "ySize_height": ("INT",),
+
+                "xMax_right": ("INT",),
+                "yMax_bottom": ("INT",),
+                "xCenter": ("INT",),
+                "yCenter": ("INT",),
+            },
+        }
+    
+    RETURN_TYPES = ("BBOX", "INT", "INT", "INT", "INT", "INT", "INT", "INT", "INT")
+    RETURN_NAMES = (
+        "bbox",
+        "xMin_left",
+        "yMin_top",
+        "xSize_width",
+        "ySize_height",
+
+        "xMax_right",
+        "yMax_bottom",
+        "xCenter",
+        "yCenter",
+        )
+    FUNCTION = "create_box"
+    
+    CATEGORY = "ricklove/image"
+    
+    def create_box(self, 
+        bbox,
+        xMin_left,
+        yMin_top,
+        xMax_right,
+        yMax_bottom,
+        xSize_width,
+        ySize_height,
+        xCenter,
+        yCenter,
+        ):
+
+        l = 0
+        t = 0
+        w = 0
+        h = 0
+
+        if bbox is not None:
+            (l,t,w,h) = bbox
+        
+        if xMin_left > 0:
+            l = xMin_left
+        if yMin_top > 0:
+            t = yMin_top
+        if xSize_width > 0:
+            w = xSize_width
+        if ySize_height > 0:
+            h = ySize_height
+
+        if xMax_right > 0:
+            w = xMax_right - l + 1
+        if yMax_bottom > 0:
+            h = yMax_bottom - t + 1
+
+        if xCenter > 0:
+            l = xCenter - xSize_width // 2
+        if yCenter > 0:
+            t = yCenter - ySize_height // 2
+
+        return ((l,t,w,h), l, t, w, h, l+w-1, t+h-1, l+w//2, t+h//2)
 
 class RL_Crop_Resize:
     def __init__(self):
@@ -299,7 +379,10 @@ class RL_Crop_Resize:
             # out_cropSizes.append(cropSize.ltrbwh_source_and_wh_resized)
 
         # NOTE: only the last size is returned
-        return (pil2tensor(out_images), pil2tensor(out_masks), [cropSize.ltrb_source]) + cropSize.ltrbwh_source_and_wh_resized
+        (l,t,r,b) = cropSize.ltrb_source
+        (w,h) = cropSize.wh_source
+
+        return (pil2tensor(out_images), pil2tensor(out_masks), (l,t,w,h)) + cropSize.ltrbwh_source_and_wh_resized
 
 class RL_Uncrop:
     def __init__(self):
@@ -311,7 +394,7 @@ class RL_Uncrop:
             "required": {
                 "image": ("IMAGE",),
                 "cropped_image": ("IMAGE",),
-                "box": ("BBOX",)
+                "bbox": ("BBOX",)
             },
             "optional": {
                 "blend": ("FLOAT",{"default": 0.10, "min": 0, "max": 1, "step": 0.01}),
@@ -324,7 +407,7 @@ class RL_Uncrop:
     
     CATEGORY = "ricklove/image"
     
-    def uncrop_image(self, image, cropped_image, box, blend=0.0):
+    def uncrop_image(self, image, cropped_image, bbox, blend=0.0):
 
         images_pil = tensor2pil(image)
         cropped_images_pil = tensor2pil(cropped_image)
@@ -333,8 +416,8 @@ class RL_Uncrop:
         
         for i,image_pil in enumerate(images_pil):
             cropped_image_pil = cropped_images_pil[i]
-            (t,l,r,b) = box
-            (out_image, blend_mask) = uncrop_image(image_pil, cropped_image_pil, t,l,r,b, blend)
+            bbox = bbox if not isinstance(bbox, list) else bbox[0] if len(bbox) < i else bbox[i]
+            (out_image, blend_mask) = uncrop_image(image_pil, cropped_image_pil, bbox, blend)
             out_images.append(out_image)
             out_blend_masks.append(blend_mask)
         
