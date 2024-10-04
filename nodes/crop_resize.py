@@ -334,7 +334,7 @@ class RL_Crop_Resize:
 
         out_images = []
         out_masks = []
-        # out_bboxes = []
+        out_bboxes = []
         # out_cropSizes = []
 
         w_max = 0
@@ -375,14 +375,14 @@ class RL_Crop_Resize:
             print(f'crop_resize: {(max_side_length, width, height)} out:{cropSize}')
             out_images.append(out_image)
             out_masks.append(out_mask)
-            # out_bboxes.append(cropSize.ltrb_source)
+
+            (l,t,r,b) = cropSize.ltrb_source
+            (w,h) = cropSize.wh_source
+            out_bboxes.append(cropSize.ltrb_source)
             # out_cropSizes.append(cropSize.ltrbwh_source_and_wh_resized)
 
-        # NOTE: only the last size is returned
-        (l,t,r,b) = cropSize.ltrb_source
-        (w,h) = cropSize.wh_source
 
-        return (pil2tensor(out_images), pil2tensor(out_masks), (l,t,w,h)) + cropSize.ltrbwh_source_and_wh_resized
+        return (pil2tensor(out_images), pil2tensor(out_masks), out_bboxes) + cropSize.ltrbwh_source_and_wh_resized
 
 class RL_Uncrop:
     def __init__(self):
@@ -416,8 +416,8 @@ class RL_Uncrop:
         
         for i,image_pil in enumerate(images_pil):
             cropped_image_pil = cropped_images_pil[i]
-            bbox = bbox if not isinstance(bbox, list) else bbox[0] if len(bbox) < i else bbox[i]
-            (out_image, blend_mask) = uncrop_image(image_pil, cropped_image_pil, bbox, blend)
+            box = bbox if not isinstance(bbox, list) else bbox[0] if len(bbox) < i else bbox[i]
+            (out_image, blend_mask) = uncrop_image(image_pil, cropped_image_pil, box, blend)
             out_images.append(out_image)
             out_blend_masks.append(blend_mask)
         

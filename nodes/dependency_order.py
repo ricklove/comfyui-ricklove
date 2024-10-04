@@ -177,6 +177,29 @@ class RL_ForceDependencyOrder_Images:
             unload_all_models()
         return (a, b, c, d, e, f)
     
+class RL_ForceDependencyOrder_String:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required":{
+                "unload_models": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "a": ("STRING", {"forceInput": True}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", )
+    RETURN_NAMES = ("a", )
+    FUNCTION = "passthrough"
+
+    CATEGORY = "ricklove/dependencies"
+
+    def passthrough(self, unload_models=True, a=None, ):
+        if unload_models: 
+            unload_all_models()
+        return (a, )
+    
 class RL_ForceDependencyOrder_Strings:
     @classmethod
     def INPUT_TYPES(s):

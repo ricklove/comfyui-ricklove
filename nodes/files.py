@@ -179,17 +179,24 @@ class RL_LoadImageSequence:
             current_frame,
         )
 
-    @staticmethod
-    def IS_CHANGED(path="", current_frame=0, **kwargs):
-        print(f"Checking if changed: {path}, {current_frame}")
-        resolved_path = resolve_path(path, current_frame)
-        image_path = folder_paths.get_annotated_filepath(resolved_path)
-        if os.path.exists(image_path):
-            m = hashlib.sha256()
-            with open(image_path, "rb") as f:
-                m.update(f.read())
-            return m.digest().hex()
-        return "NONE"
+    # @classmethod
+    # def IS_CHANGED(self, path='', current_frame=0, count=1, select_every_nth=1):
+    #     print(f"Checking if changed: {path}, {current_frame}")
+    #     resolved_path = resolve_path(path, current_frame)
+    #     image_path = folder_paths.get_annotated_filepath(resolved_path)
+    #     m = hashlib.sha256()
+    #     with open(image_path, 'rb') as f:
+    #         m.update(f.read())
+    #     return m.digest().hex()
+
+    #     # resolved_path = resolve_path(path, current_frame)
+    #     # image_path = folder_paths.get_annotated_filepath(resolved_path)
+    #     # if os.path.exists(image_path):
+    #     #     m = hashlib.sha256()
+    #     #     with open(image_path, "rb") as f:
+    #     #         m.update(f.read())
+    #     #     return m.digest().hex()
+    #     # return "NONE"
 
 
 import glob
@@ -214,3 +221,46 @@ def resolve_path(path, frame):
     hashes = path.count("#")
     padded_number = str(frame).zfill(hashes)
     return re.sub("#+", padded_number, path)
+
+
+class RL_IfFileExists:
+    def __init__(self):
+        pass
+    @classmethod
+    def INPUT_TYPES(self):
+        
+        return {
+                    "required":
+                    {
+                        "path": ("STRING", {"default": "videos/#####.png"}),
+                        "true_value": ("INT", {"default": 1, },),
+                        "false_value": ("INT", {"default": 2, },),
+                    },
+                    "optional": {
+                        "current_frame": (
+                            "INT",
+                            {"default": 0, "min": 0, "max": 9999999},
+                        ),
+                    },
+                }
+
+
+    CATEGORY = "ricklove/IO"
+    FUNCTION = "check_file"
+    RETURN_TYPES = (
+        "BOOLEAN",
+        "INT",
+    )
+    RETURN_NAMES = (
+        "exists",
+        "value",
+    )
+
+    def check_file(self, path, true_value, false_value, current_frame=0):
+        resolved_path = resolve_path(path, current_frame)
+        image_path = folder_paths.get_annotated_filepath(resolved_path)
+        print(f"Checking if file exists: {resolved_path}")
+        if os.path.exists(image_path):
+            return (True, true_value)
+        else:
+            return (False, false_value)
