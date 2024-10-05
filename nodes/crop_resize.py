@@ -207,15 +207,15 @@ class RL_BBox:
             "optional": {
                 # if !mask => the image is only resized
                 "bbox": ("BBOX",),
-                "xMin_left": ("INT",),
-                "yMin_top": ("INT",),
-                "xSize_width": ("INT",),
-                "ySize_height": ("INT",),
+                "xMin_left": ("INT", {"forceInput": True}),
+                "yMin_top": ("INT", {"forceInput": True}),
+                "xSize_width": ("INT", {"forceInput": True}),
+                "ySize_height": ("INT", {"forceInput": True}),
 
-                "xMax_right": ("INT",),
-                "yMax_bottom": ("INT",),
-                "xCenter": ("INT",),
-                "yCenter": ("INT",),
+                "xMax_right": ("INT", {"forceInput": True}),
+                "yMax_bottom": ("INT", {"forceInput": True}),
+                "xCenter": ("INT", {"forceInput": True}),
+                "yCenter": ("INT", {"forceInput": True}),
             },
         }
     

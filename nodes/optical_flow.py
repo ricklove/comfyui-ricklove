@@ -53,3 +53,42 @@ class RL_Warp_Image:
         # print('warped_image', warped_image.shape, warped_image)
 
         return (np2tensor(warped_image),)
+    
+class RL_Save_Flow:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "flo": ("FLO",), 
+                "path": ("STRING",),
+            },
+        }
+
+    RETURN_TYPES = ("FLO",)
+    FUNCTION = "save_flow"
+
+    CATEGORY = "ricklove/flow"
+
+    def save_flow(self, flo, path):
+        # print('save_flow', flo.shape, path)
+        np.save(path, flo.cpu().numpy().squeeze())
+        return (flo,)
+    
+class RL_Load_Flow:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "path": ("STRING",),
+            },
+        }
+
+    RETURN_TYPES = ("FLO",)
+    FUNCTION = "load_flow"
+
+    CATEGORY = "ricklove/flow"
+
+    def load_flow(self, path):
+        # print('load_flow', path)
+        flo = np.load(path)
+        return (torch.from_numpy(flo).unsqueeze(0),)
