@@ -1,0 +1,3 @@
+[submodule "DIP"]
+	path = ext/DIP
+	url = https://github.com/zihuazheng/DIP
